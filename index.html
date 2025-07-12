@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Studio Booking (Enhanced Admin)</title>
+  <title>Studio Booking (Enhanced Admin, HashRouter)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <style>body { font-family: 'Inter', sans-serif; }</style>
@@ -33,7 +33,7 @@
     const db = firebase.database();
 
     const { useState, useEffect, useMemo, useCallback } = React;
-    const { BrowserRouter, Route, Switch, Link, useHistory, Redirect, useLocation } = ReactRouterDOM;
+    const { HashRouter, Route, Switch, Link, useHistory, Redirect, useLocation } = ReactRouterDOM;
 
     // --- Booking CRUD with Firebase ---
     function createBooking(booking) {
@@ -429,7 +429,6 @@
       );
     }
 
-    // --- EditBookingModal: Modal for editing confirmed booking ---
     function EditBookingModal({ booking, onSave, onCancel }) {
       const [date, setDate] = useState(booking.date);
       const [startTime, setStartTime] = useState(booking.startTime);
@@ -536,13 +535,6 @@
         });
       }
 
-      function handleCancel(id) {
-        updateBooking(id, { status: "cancelled" }).then(() => {
-          setAdminMsg("Booking cancelled.");
-          setTimeout(() => setAdminMsg(null), 3000);
-        });
-      }
-
       if (!isAuthenticated) {
         return (
           React.createElement("div", { className: "max-w-sm mx-auto mt-16 bg-zinc-800 p-8 rounded-xl shadow-lg border border-zinc-700" },
@@ -615,7 +607,11 @@
                           }, "Confirm"),
                           React.createElement("button", {
                             className: "bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700",
-                            onClick: () => handleStatus(b.id, "cancelled")
+                            onClick: () => {
+                              if (window.confirm("Are you sure you want to cancel this booking?")) {
+                                handleStatus(b.id, "cancelled");
+                              }
+                            }
                           }, "Cancel")
                         ),
                         b.status === "confirmed" && React.createElement("div", null,
@@ -625,7 +621,11 @@
                           }, "Edit"),
                           React.createElement("button", {
                             className: "bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700",
-                            onClick: () => handleStatus(b.id, "cancelled")
+                            onClick: () => {
+                              if (window.confirm("Are you sure you want to cancel this booking?")) {
+                                handleStatus(b.id, "cancelled");
+                              }
+                            }
                           }, "Cancel")
                         )
                       )
@@ -642,7 +642,7 @@
       const [isAuthenticated, setIsAuthenticated] = useState(false);
 
       return (
-        React.createElement(BrowserRouter, null,
+        React.createElement(HashRouter, null,
           React.createElement(Header, { isAuthenticated, logout: () => setIsAuthenticated(false) }),
           React.createElement("main", null,
             React.createElement(Switch, null,
