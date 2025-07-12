@@ -205,16 +205,115 @@ const Pricing = ({ onSelectPlan }) => {
   );
 };
 
-// --- START OF components/BookingForm.tsx ---
-const IndianPaymentIcons = () => (
-    React.createElement("div", { className: "flex items-center space-x-4" },
-        React.createElement("img", { src: "https://upload.wikimedia.org/wikipedia/commons/e/e1/UPI-Logo-vector.svg", alt: "UPI", className: "h-8 bg-white p-1 rounded-md" }),
-        React.createElement("img", { src: "https://upload.wikimedia.org/wikipedia/commons/c/cb/Rupay-Logo.png", alt: "Rupay", className: "h-8" }),
-        React.createElement("img", { src: "https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg", alt: "Visa", className: "h-5" }),
-        React.createElement("img", { src: "https://upload.wikimedia.org/wikipedia/commons/a/a4/Mastercard_2019_logo.svg", alt: "Mastercard", className: "h-6" })
-    )
-);
 
+// --- START OF components/UpiPaymentModal.tsx ---
+const UpiPaymentModal = ({ isOpen, onClose, amount, onPaymentSuccess }) => {
+    const isMobileDevice = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    const UPI_ID = 'qr.possible@sib';
+    const STUDIO_NAME = 'Possible Studio';
+    const QR_CODE_URL = 'https://i.imgur.com/g23A6tP.png';
+
+    const [isMobile, setIsMobile] = useState(false);
+    const [paymentInitiated, setPaymentInitiated] = useState(false);
+    const [userUpiId, setUserUpiId] = useState('');
+
+    useEffect(() => {
+        setIsMobile(isMobileDevice());
+        if (isOpen) {
+            setPaymentInitiated(false);
+            setUserUpiId('');
+        }
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    const handleMobilePay = () => {
+        const upiUrl = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${amount.toFixed(2)}&cu=INR&tn=Studio%20Booking`;
+        window.location.href = upiUrl;
+        setPaymentInitiated(true);
+    };
+
+    const handleDesktopRequest = () => {
+        if (userUpiId && /.+@.+/.test(userUpiId)) {
+            alert(`A payment request for ₹${amount.toLocaleString('en-IN')} has been sent to ${userUpiId}. Please approve it on your UPI app.`);
+            setPaymentInitiated(true);
+        } else {
+            alert('Please enter a valid UPI ID.');
+        }
+    };
+    
+    const handlePaymentConfirmed = () => {
+        onPaymentSuccess();
+    }
+
+    const renderDesktopView = () => (
+        React.createElement(React.Fragment, null,
+            React.createElement("h3", { className: "text-xl font-bold text-center text-white mb-2" }, "Scan to Pay"),
+            React.createElement("div", { className: "bg-white p-4 rounded-lg flex justify-center" },
+                React.createElement("img", { src: QR_CODE_URL, alt: "UPI QR Code", className: "w-48 h-48" })
+            ),
+            React.createElement("p", { className: "text-center text-gray-300 mt-2 font-mono" }, `UPI ID: ${UPI_ID}`),
+            React.createElement("div", { className: "relative my-6" },
+                React.createElement("div", { className: "absolute inset-0 flex items-center", "aria-hidden": "true" }, React.createElement("div", { className: "w-full border-t border-zinc-600" })),
+                React.createElement("div", { className: "relative flex justify-center" }, React.createElement("span", { className: "bg-zinc-800 px-2 text-sm text-gray-400" }, "OR"))
+            ),
+            React.createElement("h3", { className: "text-lg font-semibold text-white mb-2" }, "Send Payment Request"),
+            React.createElement("div", { className: "flex space-x-2" },
+                React.createElement("input", { 
+                    type: "text", 
+                    value: userUpiId,
+                    onChange: (e) => setUserUpiId(e.target.value),
+                    placeholder: "Enter your UPI ID", 
+                    className: "flex-grow p-3 bg-zinc-700 text-white rounded-lg border border-zinc-600 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
+                }),
+                React.createElement("button", { onClick: handleDesktopRequest, className: "px-4 py-2 font-medium text-white bg-zinc-600 rounded-md hover:bg-yellow-500 transition-colors" }, "Request")
+            ),
+            React.createElement("div", { className: "mt-8" },
+                React.createElement("button", { 
+                    onClick: handlePaymentConfirmed,
+                    className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+                }, "I Have Completed The Payment")
+            )
+        )
+    );
+
+    const renderMobileView = () => (
+        React.createElement(React.Fragment, null,
+            !paymentInitiated ? (
+                React.createElement("button", { onClick: handleMobilePay, className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-3" },
+                    React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-8 w-8", viewBox: "0 0 24 24", fill: "currentColor" }, React.createElement("path", { d: "M16.5 13.5h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zm-9-4h9c.83 0 1.5-.67 1.5-1.5S17.33 6.5 16.5 6.5h-9C6.67 6.5 6 7.17 6 8s.67 1.5 1.5 1.5zm9 8h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zM22 2H2v20h20V2zm-2 18H4V4h16v16z"})),
+                    React.createElement("span", null, "Pay with UPI App")
+                )
+            ) : (
+                React.createElement("div", { className: "text-center" },
+                    React.createElement("p", { className: "text-gray-300 mb-4" }, "After completing the payment in your UPI app, click the button below to confirm your booking."),
+                    React.createElement("button", { onClick: handlePaymentConfirmed, className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors" },
+                        "Confirm Booking"
+                    )
+                )
+            )
+        )
+    );
+
+    return (
+        React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
+            React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative" },
+                React.createElement("button", { onClick: onClose, className: "absolute top-3 right-4 text-gray-400 hover:text-white transition-colors text-3xl font-light" }, "×"),
+                React.createElement("div", { className: "text-center mb-4" },
+                    React.createElement("h2", { className: "text-2xl font-bold text-yellow-400" }, "Complete Your Payment"),
+                    React.createElement("p", { className: "text-gray-400" }, "Total Amount to Pay: ", React.createElement("span", { className: "font-bold text-white" }, `₹${amount.toLocaleString('en-IN')}`))
+                ),
+                React.createElement("div", { className: "mt-6" },
+                    isMobile ? renderMobileView() : renderDesktopView()
+                )
+            )
+        )
+    );
+};
+
+
+// --- START OF components/BookingForm.tsx ---
 const BookingForm = ({ plan, addBooking, getUnavailableHours, onCancel }) => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('');
@@ -224,6 +323,7 @@ const BookingForm = ({ plan, addBooking, getUnavailableHours, onCancel }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [formError, setFormError] = useState('');
+  const [showUpiModal, setShowUpiModal] = useState(false);
 
   useEffect(() => {
     setStartTime('');
@@ -289,7 +389,10 @@ const BookingForm = ({ plan, addBooking, getUnavailableHours, onCancel }) => {
         }
         return;
     }
-
+    setShowUpiModal(true);
+  };
+  
+  const handlePaymentSuccess = () => {
     addBooking({
       planId: plan.id,
       planName: plan.name,
@@ -304,71 +407,78 @@ const BookingForm = ({ plan, addBooking, getUnavailableHours, onCancel }) => {
       paymentOption,
       bookedVia: 'website'
     });
+    setShowUpiModal(false);
   };
 
   return (
-    React.createElement("section", { className: "py-20 sm:py-24 bg-zinc-800" },
-      React.createElement("div", { className: "container mx-auto max-w-4xl px-4" },
-        React.createElement("div", { className: "bg-zinc-900 p-8 md:p-12 rounded-2xl shadow-2xl border border-zinc-700" },
-          React.createElement("div", { className: "flex justify-between items-start mb-6" },
-            React.createElement("div", null,
-                React.createElement("h2", { className: "text-3xl font-bold text-white mb-2" }, "Book: ", React.createElement("span", { className: "text-yellow-400" }, plan.name)),
-                React.createElement("p", { className: "text-gray-400" }, "Complete the steps below to secure your spot.")
-            ),
-            React.createElement("button", { onClick: onCancel, className: "text-gray-400 hover:text-white transition-colors text-3xl font-light" }, "×")
-          ),
-          
-          React.createElement("form", { onSubmit: handleSubmit, className: "space-y-8" },
-            React.createElement("div", null,
-              React.createElement("label", { className: "block text-lg font-semibold text-white mb-3" }, "1. Select Date & Time"),
-              React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-3 gap-4" },
-                React.createElement("input", { type: "date", value: date, min: new Date().toISOString().split('T')[0], onChange: (e) => setDate(e.target.value), className: "sm:col-span-1 w-full p-3 bg-zinc-700 text-white rounded-lg border border-zinc-600 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500" }),
-                React.createElement("select", { value: startTime, onChange: e => setStartTime(e.target.value), className: "sm:col-span-1 w-full p-3 bg-zinc-700 text-white rounded-lg border border-zinc-600 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500" },
-                  React.createElement("option", { value: "" }, "Start Time"),
-                  startTimes.map(time => React.createElement("option", { key: time.value, value: time.value, disabled: time.disabled }, time.value))
-                ),
-                React.createElement("select", { value: endTime, onChange: e => setEndTime(e.target.value), disabled: !startTime, className: "sm:col-span-1 w-full p-3 bg-zinc-700 text-white rounded-lg border border-zinc-600 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 disabled:opacity-50" },
-                  React.createElement("option", { value: "" }, "End Time"),
-                  endTimes.map(time => React.createElement("option", { key: time.value, value: time.value }, time.value))
-                )
-              )
-            ),
-
-            React.createElement("div", null,
-              React.createElement("h3", { className: "text-lg font-semibold text-white mb-3" }, "2. Your Details"),
-              React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" },
-                React.createElement("input", { type: "text", placeholder: "Full Name", value: name, onChange: e => setName(e.target.value), className: "w-full p-3 bg-zinc-700 text-white rounded-lg border border-zinc-600 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500" }),
-                React.createElement("input", { type: "tel", placeholder: "10-Digit Phone Number", value: phone, onChange: e => setPhone(e.target.value), className: "flex-grow p-3 bg-zinc-700 text-white rounded-lg border border-zinc-600 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500" })
+    React.createElement(React.Fragment, null,
+      React.createElement("section", { className: "py-20 sm:py-24 bg-zinc-800" },
+        React.createElement("div", { className: "container mx-auto max-w-4xl px-4" },
+          React.createElement("div", { className: "bg-zinc-900 p-8 md:p-12 rounded-2xl shadow-2xl border border-zinc-700" },
+            React.createElement("div", { className: "flex justify-between items-start mb-6" },
+              React.createElement("div", null,
+                  React.createElement("h2", { className: "text-3xl font-bold text-white mb-2" }, "Book: ", React.createElement("span", { className: "text-yellow-400" }, plan.name)),
+                  React.createElement("p", { className: "text-gray-400" }, "Complete the steps below to secure your spot.")
               ),
-              formError && React.createElement("p", { className: "text-red-400 text-sm mt-2" }, formError)
+              React.createElement("button", { onClick: onCancel, className: "text-gray-400 hover:text-white transition-colors text-3xl font-light" }, "×")
             ),
-            React.createElement("div", null,
-              React.createElement("h3", { className: "text-lg font-semibold text-white mb-3" }, "3. Choose Payment Option"),
-              React.createElement("div", { className: `p-4 bg-zinc-800 rounded-lg mb-4 ${duration > 0 ? 'block' : 'hidden'}` },
-                React.createElement("p", { className: "text-lg" }, "Duration: ", React.createElement("span", { className: "font-bold text-yellow-400" }, `${duration} ${duration === 1 ? 'hour' : 'hours'}`)),
-                React.createElement("p", { className: "text-lg" }, "Total Cost: ", React.createElement("span", { className: "font-bold text-yellow-400" }, `₹${totalCost.toLocaleString('en-IN')}`))
-              ),
-              React.createElement("div", { className: `flex space-x-4 ${duration > 0 ? 'flex' : 'hidden'}` },
-                  React.createElement("button", { type: "button", onClick: () => setPaymentOption('half'), className: `flex-1 p-4 rounded-lg border-2 text-left transition-colors ${paymentOption === 'half' ? 'border-yellow-500 bg-yellow-900/30' : 'border-zinc-600 bg-zinc-700'}` },
-                      React.createElement("p", { className: "font-bold" }, "50% Advance"), React.createElement("p", { className: "text-2xl font-bold" }, `₹${(totalCost / 2).toLocaleString('en-IN')}`), React.createElement("p", { className: "text-sm text-gray-400" }, "Pay remaining at studio")
+            
+            React.createElement("form", { onSubmit: handleSubmit, className: "space-y-8" },
+              React.createElement("div", null,
+                React.createElement("label", { className: "block text-lg font-semibold text-white mb-3" }, "1. Select Date & Time"),
+                React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-3 gap-4" },
+                  React.createElement("input", { type: "date", value: date, min: new Date().toISOString().split('T')[0], onChange: (e) => setDate(e.target.value), className: "sm:col-span-1 w-full p-3 bg-zinc-700 text-white rounded-lg border border-zinc-600 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500" }),
+                  React.createElement("select", { value: startTime, onChange: e => setStartTime(e.target.value), className: "sm:col-span-1 w-full p-3 bg-zinc-700 text-white rounded-lg border border-zinc-600 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500" },
+                    React.createElement("option", { value: "" }, "Start Time"),
+                    startTimes.map(time => React.createElement("option", { key: time.value, value: time.value, disabled: time.disabled }, time.value))
                   ),
-                  React.createElement("button", { type: "button", onClick: () => setPaymentOption('full'), className: `flex-1 p-4 rounded-lg border-2 text-left transition-colors ${paymentOption === 'full' ? 'border-yellow-500 bg-yellow-900/30' : 'border-zinc-600 bg-zinc-700'}` },
-                      React.createElement("p", { className: "font-bold" }, "Full Payment"), React.createElement("p", { className: "text-2xl font-bold" }, `₹${totalCost.toLocaleString('en-IN')}`), React.createElement("p", { className: "text-sm text-yellow-400" }, "No hassle on shoot day")
+                  React.createElement("select", { value: endTime, onChange: e => setEndTime(e.target.value), disabled: !startTime, className: "sm:col-span-1 w-full p-3 bg-zinc-700 text-white rounded-lg border border-zinc-600 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 disabled:opacity-50" },
+                    React.createElement("option", { value: "" }, "End Time"),
+                    endTimes.map(time => React.createElement("option", { key: time.value, value: time.value }, time.value))
                   )
+                )
               ),
-              React.createElement("div", { className: "mt-4 p-4 bg-zinc-800 rounded-lg" },
-                React.createElement("p", { className: "text-sm text-gray-400" }, "We accept all major Indian payment methods:"),
-                React.createElement("div", { className: "mt-2" }, React.createElement(IndianPaymentIcons, null))
-              )
-            ),
-            React.createElement("div", { className: "pt-4" },
-              React.createElement("button", { type: "submit", disabled: !isFormValid, className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed" },
-                duration > 0 ? `Confirm & Pay ₹${amountToPay.toLocaleString('en-IN')}` : 'Complete All Fields'
+              React.createElement("div", null,
+                React.createElement("h3", { className: "text-lg font-semibold text-white mb-3" }, "2. Your Details"),
+                React.createElement("div", { className: "grid grid-cols-1 sm:grid-cols-2 gap-4" },
+                  React.createElement("input", { type: "text", placeholder: "Full Name", value: name, onChange: e => setName(e.target.value), className: "w-full p-3 bg-zinc-700 text-white rounded-lg border border-zinc-600 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500" }),
+                  React.createElement("input", { type: "tel", placeholder: "10-Digit Phone Number", value: phone, onChange: e => setPhone(e.target.value), className: "flex-grow p-3 bg-zinc-700 text-white rounded-lg border border-zinc-600 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500" })
+                ),
+                formError && React.createElement("p", { className: "text-red-400 text-sm mt-2" }, formError)
+              ),
+              React.createElement("div", null,
+                React.createElement("h3", { className: "text-lg font-semibold text-white mb-3" }, "3. Choose Payment Option"),
+                React.createElement("div", { className: `p-4 bg-zinc-800 rounded-lg mb-4 ${duration > 0 ? 'block' : 'hidden'}` },
+                  React.createElement("p", { className: "text-lg" }, "Duration: ", React.createElement("span", { className: "font-bold text-yellow-400" }, `${duration} ${duration === 1 ? 'hour' : 'hours'}`)),
+                  React.createElement("p", { className: "text-lg" }, "Total Cost: ", React.createElement("span", { className: "font-bold text-yellow-400" }, `₹${totalCost.toLocaleString('en-IN')}`))
+                ),
+                React.createElement("div", { className: `flex space-x-4 ${duration > 0 ? 'flex' : 'hidden'}` },
+                    React.createElement("button", { type: "button", onClick: () => setPaymentOption('half'), className: `flex-1 p-4 rounded-lg border-2 text-left transition-colors ${paymentOption === 'half' ? 'border-yellow-500 bg-yellow-900/30' : 'border-zinc-600 bg-zinc-700'}` },
+                        React.createElement("p", { className: "font-bold" }, "50% Advance"), React.createElement("p", { className: "text-2xl font-bold" }, `₹${(totalCost / 2).toLocaleString('en-IN')}`), React.createElement("p", { className: "text-sm text-gray-400" }, "Pay remaining at studio")
+                    ),
+                    React.createElement("button", { type: "button", onClick: () => setPaymentOption('full'), className: `flex-1 p-4 rounded-lg border-2 text-left transition-colors ${paymentOption === 'full' ? 'border-yellow-500 bg-yellow-900/30' : 'border-zinc-600 bg-zinc-700'}` },
+                        React.createElement("p", { className: "font-bold" }, "Full Payment"), React.createElement("p", { className: "text-2xl font-bold" }, `₹${totalCost.toLocaleString('en-IN')}`), React.createElement("p", { className: "text-sm text-yellow-400" }, "No hassle on shoot day")
+                    )
+                ),
+                React.createElement("div", { className: "mt-4 p-4 bg-zinc-800 rounded-lg" },
+                    React.createElement("p", { className: "text-sm text-gray-400" }, "Payment will be processed via UPI. We support all major UPI apps.")
+                )
+              ),
+              React.createElement("div", { className: "pt-4" },
+                React.createElement("button", { type: "submit", disabled: !isFormValid, className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed" },
+                  duration > 0 ? `Proceed to Pay ₹${amountToPay.toLocaleString('en-IN')}` : 'Complete All Fields'
+                )
               )
             )
           )
         )
-      )
+      ),
+      React.createElement(UpiPaymentModal, {
+        isOpen: showUpiModal,
+        onClose: () => setShowUpiModal(false),
+        amount: amountToPay,
+        onPaymentSuccess: handlePaymentSuccess
+      })
     )
   );
 };
@@ -581,149 +691,68 @@ const Footer = () => {
 };
 
 // --- START OF components/Auth.tsx ---
-const Auth = ({ onLogin, onSignup }) => {
-    const [mode, setMode] = useState('LOGIN');
-    const [email, setEmail] = useState('');
+const Auth = ({ onLogin }) => {
+    const [userId, setUserId] = useState('');
     const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
-    const [successMessage, setSuccessMessage] = useState('');
 
     const handleFormSubmit = (e) => {
         e.preventDefault();
         setError('');
-        setSuccessMessage('');
-
-        if (mode === 'LOGIN') {
-            const success = onLogin(email, password);
-            if (!success) {
-                setError('Invalid email or password.');
-            }
-        } else if (mode === 'SIGNUP') {
-            if (password !== confirmPassword) {
-                setError('Passwords do not match.');
-                return;
-            }
-            if(password.length < 6){
-                setError('Password must be at least 6 characters long.');
-                return;
-            }
-            const success = onSignup(email, password);
-            if (!success) {
-                setError('An account with this email already exists.');
-            }
-        } else if (mode === 'FORGOT_PASSWORD') {
-            if(email.trim() === ''){
-                setError('Please enter your email address.');
-                return;
-            }
-            setSuccessMessage(`A password reset link has been sent to ${email}. Please check your inbox.`);
+        const success = onLogin(userId, password);
+        if (!success) {
+            setError('Invalid User ID or password.');
         }
     };
-
-    const switchMode = (newMode) => {
-        setMode(newMode);
-        setError('');
-        setSuccessMessage('');
-        setEmail('');
-        setPassword('');
-        setConfirmPassword('');
-    };
-
-    const getTitle = () => {
-        switch (mode) {
-            case 'LOGIN': return 'Admin Login';
-            case 'SIGNUP': return 'Create Admin Profile';
-            case 'FORGOT_PASSWORD': return 'Reset Password';
-        }
-    }
 
     return (
         React.createElement("div", { className: "flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8" },
             React.createElement("div", { className: "max-w-md w-full space-y-8 bg-zinc-800 p-10 rounded-xl shadow-lg border border-zinc-700" },
                 React.createElement("div", null,
                     React.createElement("h2", { className: "mt-6 text-center text-3xl font-extrabold text-white" },
-                        getTitle()
+                        "Admin Login"
                     )
                 ),
                 React.createElement("form", { className: "mt-8 space-y-6", onSubmit: handleFormSubmit },
                     React.createElement("div", { className: "rounded-md shadow-sm -space-y-px" },
                         React.createElement("div", null,
-                            React.createElement("label", { htmlFor: "email-address", className: "sr-only" }, "Email address"),
+                            React.createElement("label", { htmlFor: "user-id", className: "sr-only" }, "User ID"),
                             React.createElement("input", {
-                                id: "email-address",
-                                name: "email",
-                                type: "email",
-                                autoComplete: "email",
+                                id: "user-id",
+                                name: "userid",
+                                type: "text",
+                                autoComplete: "username",
                                 required: true,
-                                value: email,
-                                onChange: (e) => setEmail(e.target.value),
+                                value: userId,
+                                onChange: (e) => setUserId(e.target.value),
                                 className: "appearance-none rounded-none relative block w-full px-3 py-3 border border-zinc-600 bg-zinc-700 text-white placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm rounded-t-md",
-                                placeholder: "Email address"
+                                placeholder: "User ID"
                             })
                         ),
-                        mode !== 'FORGOT_PASSWORD' && (
-                            React.createElement("div", null,
-                                React.createElement("label", { htmlFor: "password", className: "sr-only" }, "Password"),
-                                React.createElement("input", {
-                                    id: "password",
-                                    name: "password",
-                                    type: "password",
-                                    autoComplete: mode === 'LOGIN' ? 'current-password' : 'new-password',
-                                    required: true,
-                                    value: password,
-                                    onChange: (e) => setPassword(e.target.value),
-                                    className: `appearance-none rounded-none relative block w-full px-3 py-3 border border-zinc-600 bg-zinc-700 text-white placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm ${mode === 'LOGIN' ? 'rounded-b-md' : ''}`,
-                                    placeholder: "Password"
-                                })
-                            )
-                        ),
-                        mode === 'SIGNUP' && (
-                            React.createElement("div", null,
-                                React.createElement("label", { htmlFor: "confirm-password", className: "sr-only" }, "Confirm Password"),
-                                React.createElement("input", {
-                                    id: "confirm-password",
-                                    name: "confirm-password",
-                                    type: "password",
-                                    autoComplete: "new-password",
-                                    required: true,
-                                    value: confirmPassword,
-                                    onChange: (e) => setConfirmPassword(e.target.value),
-                                    className: "appearance-none rounded-none relative block w-full px-3 py-3 border border-zinc-600 bg-zinc-700 text-white placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm rounded-b-md",
-                                    placeholder: "Confirm Password"
-                                })
-                            )
+                        React.createElement("div", null,
+                            React.createElement("label", { htmlFor: "password", className: "sr-only" }, "Password"),
+                            React.createElement("input", {
+                                id: "password",
+                                name: "password",
+                                type: "password",
+                                autoComplete: "current-password",
+                                required: true,
+                                value: password,
+                                onChange: (e) => setPassword(e.target.value),
+                                className: "appearance-none rounded-none relative block w-full px-3 py-3 border border-zinc-600 bg-zinc-700 text-white placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 focus:z-10 sm:text-sm rounded-b-md",
+                                placeholder: "Password"
+                            })
                         )
                     ),
                     
                     error && React.createElement("p", { className: "text-red-400 text-center text-sm" }, error),
-                    successMessage && React.createElement("p", { className: "text-green-400 text-center text-sm" }, successMessage),
 
-                    React.createElement("div", { className: "flex items-center justify-between text-sm" },
-                        mode === 'LOGIN' && (
-                            React.createElement("button", { type: "button", onClick: () => switchMode('FORGOT_PASSWORD'), className: "font-medium text-yellow-500 hover:text-yellow-400" },
-                                "Forgot your password?"
-                            )
-                        ),
-                         React.createElement("div", null),
-                         mode === 'LOGIN' ? (
-                           React.createElement("button", { type: "button", onClick: () => switchMode('SIGNUP'), className: "font-medium text-yellow-500 hover:text-yellow-400" },
-                                "Create an account"
-                            )
-                         ) : (
-                            React.createElement("button", { type: "button", onClick: () => switchMode('LOGIN'), className: "font-medium text-yellow-500 hover:text-yellow-400" },
-                                "Already have an account?"
-                            )
-                         )
-                    ),
                     React.createElement("div", null,
                         React.createElement("button", {
                             type: "submit",
                             className: "group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-slate-900 bg-yellow-500 hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 focus:ring-offset-zinc-800"
                         },
-                           mode === 'LOGIN' && 'Sign in',
-                           mode === 'SIGNUP' && 'Create Profile',
-                           mode === 'FORGOT_PASSWORD' && 'Send Reset Link'
+                           'Sign in'
                         )
                     )
                 )
@@ -748,13 +777,23 @@ const App = () => {
       if (storedBookings) setBookings(JSON.parse(storedBookings));
       
       const storedAdmins = localStorage.getItem('studioAdmins');
-      if (storedAdmins) setAdmins(JSON.parse(storedAdmins));
+      let adminData = [];
+      if (storedAdmins) {
+          adminData = JSON.parse(storedAdmins);
+      }
+
+      // Ensure the default admin exists
+      if (!adminData.some(a => a.userId === 'psmember@01')) {
+          adminData.push({ id: 'default_admin', userId: 'psmember@01', password: 'pswork@01' });
+          localStorage.setItem('studioAdmins', JSON.stringify(adminData));
+      }
+      setAdmins(adminData);
       
       const sessionAuth = localStorage.getItem('studioAuth');
       if(sessionAuth === 'true') setIsAuthenticated(true);
 
     } catch (error) {
-      console.error("Failed to parse data from localStorage", error);
+      console.error("Failed to initialize app state from localStorage", error);
     }
   }, []);
 
@@ -816,23 +855,13 @@ const App = () => {
     setSelectedPlan(null);
   };
   
-  const handleLogin = (email, password) => {
-      const admin = admins.find(a => a.email.toLowerCase() === email.toLowerCase() && a.password === password);
+  const handleLogin = (userId, password) => {
+      const admin = admins.find(a => a.userId.toLowerCase() === userId.toLowerCase() && a.password === password);
       if(admin){
           setIsAuthenticated(true);
           return true;
       }
       return false;
-  };
-  
-  const handleSignup = (email, password) => {
-      if(admins.some(a => a.email.toLowerCase() === email.toLowerCase())){
-          return false;
-      }
-      const newAdmin = { id: new Date().toISOString(), email, password };
-      setAdmins(prev => [...prev, newAdmin]);
-      setIsAuthenticated(true);
-      return true;
   };
   
   const handleLogout = () => {
@@ -874,7 +903,7 @@ const App = () => {
           isAuthenticated ? (
             React.createElement(AdminPanel, { bookings: bookings, addBooking: addBooking, getUnavailableHours: getUnavailableHours })
           ) : (
-            React.createElement(Auth, { onLogin: handleLogin, onSignup: handleSignup })
+            React.createElement(Auth, { onLogin: handleLogin })
           )
         )
       ),
@@ -899,3 +928,4 @@ root.render(
     </script>
   </body>
 </html>
+    
