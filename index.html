@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Studio Booking (Enhanced Admin, HashRouter)</title>
+  <title>Possible Studio Booking (Enhanced)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <style>body { font-family: 'Inter', sans-serif; }</style>
@@ -17,6 +17,8 @@
 </head>
 <body class="bg-zinc-900 text-white">
   <div id="root"></div>
+  <!-- Notification sound for admin panel -->
+  <audio id="notif-sound" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa1c82.mp3" preload="auto"></audio>
   <script>
     // --- Firebase Config ---
     const firebaseConfig = {
@@ -74,7 +76,7 @@
                 React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-8 w-8 text-yellow-400", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor" },
                   React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" })
                 ),
-                React.createElement("span", { className: "ml-3 text-2xl font-bold text-white" }, "Posibble Studio")
+                React.createElement("span", { className: "ml-3 text-2xl font-bold text-white uppercase" }, "Possible Studio")
               ),
               React.createElement("div", { className: "flex items-center space-x-4" },
                 isAuthenticated && location.pathname === "/admin" ? (
@@ -100,7 +102,7 @@
         React.createElement("footer", { className: "bg-zinc-800 border-t border-zinc-700 mt-16" },
           React.createElement("div", { className: "container mx-auto px-4 sm:px-6 lg:px-8 py-8" },
             React.createElement("div", { className: "text-center text-gray-400" },
-              React.createElement("p", null, `© ${new Date().getFullYear()} Posibble Studio. All Rights Reserved.`),
+              React.createElement("p", null, `© ${new Date().getFullYear()} Possible Studio. All Rights Reserved.`),
               React.createElement("p", { className: "mt-2 text-sm" }, "Built for creative professionals."),
               React.createElement("div", { className: "mt-4 flex justify-center space-x-6" },
                 React.createElement("a", { href: "#", className: "hover:text-yellow-400 transition-colors" }, "Instagram"),
@@ -262,11 +264,19 @@
       const totalAmount = plan.price * duration;
       const paymentAmount = paymentOption === "full" ? totalAmount : Math.ceil(totalAmount / 2);
 
+      function isValidPhone(num) {
+        return /^[6-9]\d{9}$/.test(num);
+      }
+
       const handleSubmit = (e) => {
         e.preventDefault();
         setFormError('');
         if (!name || !phone || !date || !startTime || !endTime) {
           setFormError('Please fill all fields.');
+          return;
+        }
+        if (!isValidPhone(phone)) {
+          setFormError('Please enter a valid 10-digit Indian phone number.');
           return;
         }
         if (duration <= 0) {
@@ -323,11 +333,19 @@
       return (
         React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700" },
           React.createElement("h2", { className: "text-2xl font-bold mb-6 text-white" }, `Book ${plan.name}`),
-          React.createElement("form", { onSubmit: handleSubmit },
+          React.createElement("form", { onSubmit: handleSubmit, autoComplete: "off" },
             React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Your Name"),
-            React.createElement("input", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white", value: name, onChange: e => setName(e.target.value) }),
+            React.createElement("input", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white", value: name, onChange: e => setName(e.target.value), autoComplete: "off" }),
             React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Phone Number"),
-            React.createElement("input", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white", value: phone, onChange: e => setPhone(e.target.value) }),
+            React.createElement("input", {
+              className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white",
+              value: phone,
+              onChange: e => setPhone(e.target.value.replace(/\D/g, '').slice(0,10)), // Only digits, max 10
+              maxLength: 10,
+              pattern: "[6-9][0-9]{9}",
+              inputMode: "numeric",
+              placeholder: "10-digit mobile"
+            }),
             React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Date"),
             React.createElement("input", { type: "date", className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white", value: date, onChange: e => setDate(e.target.value), min: new Date().toISOString().split('T')[0] }),
             React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Start Time"),
@@ -500,9 +518,24 @@
       const [bookings, setBookings] = useState([]);
       const [editBooking, setEditBooking] = useState(null);
       const [adminMsg, setAdminMsg] = useState(null);
+      const notifRef = React.useRef();
+      const prevBookingIds = React.useRef([]);
 
       useEffect(() => {
-        return listenBookings(setBookings);
+        return listenBookings((bks) => {
+          // Play sound if new booking arrives
+          const ids = bks.map(b => b.id);
+          if (prevBookingIds.current.length && ids.length > prevBookingIds.current.length) {
+            // Find the new booking(s)
+            const newBookings = bks.filter(b => !prevBookingIds.current.includes(b.id));
+            if (newBookings.length > 0) {
+              const audio = document.getElementById("notif-sound");
+              if (audio) { audio.currentTime = 0; audio.play(); }
+            }
+          }
+          prevBookingIds.current = ids;
+          setBookings(bks);
+        });
       }, []);
 
       function handleLogin(e) {
