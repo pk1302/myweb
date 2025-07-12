@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Possible Studio Booking (UPI QR Only, Bright UPI ID)</title>
+  <title>Possible Studio Booking (User Only)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <style>body { font-family: 'Inter', sans-serif; }</style>
@@ -17,8 +17,6 @@
 </head>
 <body class="bg-zinc-900 text-white">
   <div id="root"></div>
-  <!-- Notification sound for admin panel -->
-  <audio id="notif-sound" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa1c82.mp3" preload="auto"></audio>
   <script>
     // --- Firebase Config ---
     const firebaseConfig = {
@@ -35,14 +33,11 @@
     const db = firebase.database();
 
     const { useState, useEffect, useMemo, useCallback } = React;
-    const { HashRouter, Route, Switch, Link, useHistory, Redirect, useLocation } = ReactRouterDOM;
+    const { HashRouter, Route, Switch, Link, Redirect, useLocation } = ReactRouterDOM;
 
     // --- Booking CRUD with Firebase ---
     function createBooking(booking) {
       return db.ref('bookings').push(booking);
-    }
-    function updateBooking(id, updates) {
-      return db.ref('bookings/' + id).update(updates);
     }
     function listenBookings(callback) {
       const ref = db.ref('bookings');
@@ -65,9 +60,8 @@
       return `${hour < 10 ? '0' : ''}${hour}:00`;
     });
 
-    // --- Header ---
-    function Header({ isAuthenticated, logout }) {
-      const location = useLocation();
+    // --- Header (no admin button) ---
+    function Header() {
       return (
         React.createElement("header", { className: "bg-zinc-900/80 backdrop-blur-sm sticky top-0 z-40" },
           React.createElement("div", { className: "container mx-auto px-4 sm:px-6 lg:px-8" },
@@ -77,19 +71,6 @@
                   React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" })
                 ),
                 React.createElement("span", { className: "ml-3 text-2xl font-bold text-white uppercase" }, "Possible Studio")
-              ),
-              React.createElement("div", { className: "flex items-center space-x-4" },
-                isAuthenticated && location.pathname === "/admin" ? (
-                  React.createElement("button", {
-                    onClick: logout,
-                    className: "px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 transition-colors"
-                  }, "Logout")
-                ) : (
-                  React.createElement(Link, {
-                    to: "/admin",
-                    className: "px-4 py-2 text-sm font-medium text-white bg-zinc-700 rounded-md hover:bg-yellow-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 transition-colors"
-                  }, "Admin Panel")
-                )
               )
             )
           )
@@ -463,238 +444,12 @@
       );
     }
 
-    // ... The rest of the code (AdminPanel, EditBookingModal, App) is unchanged from previous versions ...
-
-    function EditBookingModal({ booking, onSave, onCancel }) {
-      const [date, setDate] = useState(booking.date);
-      const [startTime, setStartTime] = useState(booking.startTime);
-      const [endTime, setEndTime] = useState(booking.endTime);
-      const [plan, setPlan] = useState(booking.plan);
-      const [error, setError] = useState("");
-
-      const duration = useMemo(() => {
-        if (!startTime || !endTime) return 0;
-        return parseInt(endTime.split(':')[0], 10) - parseInt(startTime.split(':')[0], 10);
-      }, [startTime, endTime]);
-
-      function handleSubmit(e) {
-        e.preventDefault();
-        setError("");
-        if (!date || !startTime || !endTime || !plan) {
-          setError("Please fill all fields.");
-          return;
-        }
-        if (duration <= 0) {
-          setError("End time must be after start time.");
-          return;
-        }
-        onSave({ ...booking, date, startTime, endTime, plan });
-      }
-
-      return (
-        React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
-          React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative" },
-            React.createElement("button", { onClick: onCancel, className: "absolute top-3 right-4 text-gray-400 hover:text-white transition-colors text-3xl font-light" }, "×"),
-            React.createElement("h2", { className: "text-xl font-bold mb-4 text-white" }, "Edit Booking"),
-            React.createElement("form", { onSubmit: handleSubmit },
-              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Date"),
-              React.createElement("input", { type: "date", className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white", value: date, onChange: e => setDate(e.target.value), min: new Date().toISOString().split('T')[0] }),
-              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Start Time"),
-              React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white", value: startTime, onChange: e => setStartTime(e.target.value) },
-                React.createElement("option", { value: "" }, "Select start time"),
-                HOURLY_SLOTS.slice(0, -1).map(time =>
-                  React.createElement("option", { key: time, value: time }, time)
-                )
-              ),
-              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "End Time"),
-              React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white", value: endTime, onChange: e => setEndTime(e.target.value) },
-                React.createElement("option", { value: "" }, "Select end time"),
-                HOURLY_SLOTS.map(time =>
-                  React.createElement("option", { key: time, value: time }, time)
-                )
-              ),
-              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Plan"),
-              React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white", value: plan, onChange: e => setPlan(e.target.value) },
-                PRICING_PLANS.map(p =>
-                  React.createElement("option", { key: p.name, value: p.name }, p.name)
-                )
-              ),
-              error && React.createElement("div", { className: "mb-2 text-red-400" }, error),
-              React.createElement("div", { className: "flex space-x-4" },
-                React.createElement("button", { type: "submit", className: "bg-blue-500 text-white font-bold py-2 px-6 rounded hover:bg-blue-600 transition-colors" }, "Save"),
-                React.createElement("button", { type: "button", className: "bg-zinc-600 text-white font-bold py-2 px-6 rounded hover:bg-zinc-700 transition-colors", onClick: onCancel }, "Cancel")
-              )
-            )
-          )
-        )
-      );
-    }
-
-    function AdminPanel({ isAuthenticated, setIsAuthenticated }) {
-      const [password, setPassword] = useState('');
-      const [loginError, setLoginError] = useState('');
-      const [bookings, setBookings] = useState([]);
-      const [editBooking, setEditBooking] = useState(null);
-      const [adminMsg, setAdminMsg] = useState(null);
-      const notifRef = React.useRef();
-      const prevBookingIds = React.useRef([]);
-
-      useEffect(() => {
-        return listenBookings((bks) => {
-          // Play sound if new booking arrives
-          const ids = bks.map(b => b.id);
-          if (prevBookingIds.current.length && ids.length > prevBookingIds.current.length) {
-            // Find the new booking(s)
-            const newBookings = bks.filter(b => !prevBookingIds.current.includes(b.id));
-            if (newBookings.length > 0) {
-              const audio = document.getElementById("notif-sound");
-              if (audio) { audio.currentTime = 0; audio.play(); }
-            }
-          }
-          prevBookingIds.current = ids;
-          setBookings(bks);
-        });
-      }, []);
-
-      function handleLogin(e) {
-        e.preventDefault();
-        if (password === 'admin123') {
-          setIsAuthenticated(true);
-          setLoginError('');
-        } else {
-          setLoginError('Incorrect password');
-        }
-      }
-
-      function handleStatus(id, status) {
-        updateBooking(id, { status }).then(() => {
-          setAdminMsg(`Booking ${status === "confirmed" ? "confirmed" : "cancelled"} successfully.`);
-          setTimeout(() => setAdminMsg(null), 3000);
-        });
-      }
-
-      function handleEditSave(updated) {
-        updateBooking(updated.id, {
-          date: updated.date,
-          startTime: updated.startTime,
-          endTime: updated.endTime,
-          plan: updated.plan,
-        }).then(() => {
-          setAdminMsg("Booking updated successfully.");
-          setEditBooking(null);
-          setTimeout(() => setAdminMsg(null), 3000);
-        });
-      }
-
-      if (!isAuthenticated) {
-        return (
-          React.createElement("div", { className: "max-w-sm mx-auto mt-16 bg-zinc-800 p-8 rounded-xl shadow-lg border border-zinc-700" },
-            React.createElement("h2", { className: "text-xl font-bold mb-4" }, "Admin Login"),
-            React.createElement("form", { onSubmit: handleLogin },
-              React.createElement("input", {
-                type: "password",
-                placeholder: "Admin password",
-                className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white",
-                value: password,
-                onChange: e => setPassword(e.target.value)
-              }),
-              loginError && React.createElement("div", { className: "text-red-400 mb-2" }, loginError),
-              React.createElement("button", { type: "submit", className: "w-full bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors" }, "Login")
-            )
-          )
-        );
-      }
-
-      if (editBooking) {
-        return React.createElement(EditBookingModal, {
-          booking: editBooking,
-          onSave: handleEditSave,
-          onCancel: () => setEditBooking(null)
-        });
-      }
-
-      return (
-        React.createElement("div", { className: "container mx-auto px-4 sm:px-6 lg:px-8 py-8" },
-          React.createElement("h2", { className: "text-2xl font-bold mb-6 text-white" }, "All Bookings"),
-          adminMsg && React.createElement("div", { className: "mb-4 p-4 bg-green-800 text-green-200 rounded" }, adminMsg),
-          bookings.length === 0
-            ? React.createElement("div", { className: "text-gray-400" }, "No bookings yet.")
-            : React.createElement("table", { className: "w-full text-sm bg-zinc-800 rounded-lg overflow-hidden" },
-                React.createElement("thead", null,
-                  React.createElement("tr", { className: "bg-zinc-700 text-yellow-400" },
-                    React.createElement("th", { className: "p-2" }, "Name"),
-                    React.createElement("th", { className: "p-2" }, "Phone"),
-                    React.createElement("th", { className: "p-2" }, "Plan"),
-                    React.createElement("th", { className: "p-2" }, "Date"),
-                    React.createElement("th", { className: "p-2" }, "Time"),
-                    React.createElement("th", { className: "p-2" }, "Amount"),
-                    React.createElement("th", { className: "p-2" }, "Paid"),
-                    React.createElement("th", { className: "p-2" }, "Status"),
-                    React.createElement("th", { className: "p-2" }, "Action")
-                  )
-                ),
-                React.createElement("tbody", null,
-                  bookings.slice().reverse().map(b =>
-                    React.createElement("tr", { key: b.id, className: b.status === "cancelled" ? "bg-red-900 text-red-200" : b.status === "pending" ? "bg-zinc-700" : "bg-zinc-800" },
-                      React.createElement("td", { className: "p-2" }, b.name),
-                      React.createElement("td", { className: "p-2" }, b.phone),
-                      React.createElement("td", { className: "p-2" }, b.plan),
-                      React.createElement("td", { className: "p-2" }, b.date),
-                      React.createElement("td", { className: "p-2" }, `${b.startTime} - ${b.endTime}`),
-                      React.createElement("td", { className: "p-2" }, `₹${b.amount}`),
-                      React.createElement("td", { className: "p-2" }, `₹${b.paid}`),
-                      React.createElement("td", { className: "p-2" },
-                        b.status === "confirmed"
-                          ? React.createElement("span", { className: "text-green-400" }, "Confirmed")
-                          : b.status === "pending"
-                            ? React.createElement("span", { className: "text-yellow-400" }, "Pending")
-                            : React.createElement("span", { className: "text-red-400" }, "Cancelled")
-                      ),
-                      React.createElement("td", { className: "p-2" },
-                        b.status === "pending" && React.createElement("div", null,
-                          React.createElement("button", {
-                            className: "bg-green-600 text-white px-2 py-1 rounded mr-2 hover:bg-green-700",
-                            onClick: () => handleStatus(b.id, "confirmed")
-                          }, "Confirm"),
-                          React.createElement("button", {
-                            className: "bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700",
-                            onClick: () => {
-                              if (window.confirm("Are you sure you want to cancel this booking?")) {
-                                handleStatus(b.id, "cancelled");
-                              }
-                            }
-                          }, "Cancel")
-                        ),
-                        b.status === "confirmed" && React.createElement("div", null,
-                          React.createElement("button", {
-                            className: "bg-blue-600 text-white px-2 py-1 rounded mr-2 hover:bg-blue-700",
-                            onClick: () => setEditBooking(b)
-                          }, "Edit"),
-                          React.createElement("button", {
-                            className: "bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700",
-                            onClick: () => {
-                              if (window.confirm("Are you sure you want to cancel this booking?")) {
-                                handleStatus(b.id, "cancelled");
-                              }
-                            }
-                          }, "Cancel")
-                        )
-                      )
-                    )
-                  )
-                )
-              )
-        )
-      );
-    }
-
     function App() {
       const [selectedPlan, setSelectedPlan] = useState(null);
-      const [isAuthenticated, setIsAuthenticated] = useState(false);
 
       return (
         React.createElement(HashRouter, null,
-          React.createElement(Header, { isAuthenticated, logout: () => setIsAuthenticated(false) }),
+          React.createElement(Header, null),
           React.createElement("main", null,
             React.createElement(Switch, null,
               React.createElement(Route, { exact: true, path: "/" },
@@ -706,9 +461,6 @@
                     onCancel: () => setSelectedPlan(null)
                   })
                 )
-              ),
-              React.createElement(Route, { path: "/admin" },
-                React.createElement(AdminPanel, { isAuthenticated, setIsAuthenticated })
               ),
               React.createElement(Route, { render: () => React.createElement(Redirect, { to: "/" }) })
             )
