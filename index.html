@@ -1,5 +1,4 @@
 
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -208,7 +207,7 @@ const Pricing = ({ onSelectPlan }) => {
 
 
 // --- START OF components/UpiPaymentModal.tsx ---
-const UpiPaymentModal = ({ isOpen, onClose, amount, onPaymentSuccess }) => {
+const UpiPaymentModal = ({ isOpen, onClose, amount, booking, bookings }) => {
     const isMobileDevice = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     const UPI_ID = 'qr.possible@sib';
@@ -216,83 +215,56 @@ const UpiPaymentModal = ({ isOpen, onClose, amount, onPaymentSuccess }) => {
     const QR_CODE_URL = '/upi-qr-code.png';
 
     const [isMobile, setIsMobile] = useState(false);
-    const [paymentInitiated, setPaymentInitiated] = useState(false);
-    const [userUpiId, setUserUpiId] = useState('');
 
     useEffect(() => {
         setIsMobile(isMobileDevice());
-        if (isOpen) {
-            setPaymentInitiated(false);
-            setUserUpiId('');
-        }
-    }, [isOpen]);
+    }, []);
+
+    useEffect(() => {
+        if (!isOpen || !booking) return;
+
+        const interval = setInterval(() => {
+            const storedBookings = JSON.parse(localStorage.getItem('studioBookings') || '[]');
+            const currentBooking = storedBookings.find(b => b.id === booking.id);
+            if (currentBooking && currentBooking.status === 'confirmed') {
+                clearInterval(interval);
+                onClose();
+            }
+        }, 2000);
+
+        return () => clearInterval(interval);
+    }, [isOpen, booking, onClose]);
 
     if (!isOpen) return null;
 
     const handleMobilePay = () => {
-        const upiUrl = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${amount.toFixed(2)}&cu=INR&tn=Studio%20Booking`;
+        const upiUrl = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${amount.toFixed(2)}&cu=INR&tn=Booking%20ID%20${booking.id}`;
         window.location.href = upiUrl;
-        setPaymentInitiated(true);
     };
 
-    const handleDesktopRequest = () => {
-        if (userUpiId && /.+@.+/.test(userUpiId)) {
-            alert(`A payment request for ₹${amount.toLocaleString('en-IN')} has been sent to ${userUpiId}. Please approve it on your UPI app.`);
-            setPaymentInitiated(true);
-        } else {
-            alert('Please enter a valid UPI ID.');
-        }
-    };
-    
-    const handlePaymentConfirmed = () => {
-        onPaymentSuccess();
-    }
-
-    const renderDesktopView = () => (
+    const renderPaymentView = () => (
         React.createElement(React.Fragment, null,
-            React.createElement("h3", { className: "text-xl font-bold text-center text-white mb-2" }, "Scan to Pay"),
-            React.createElement("div", { className: "bg-white p-4 rounded-lg flex justify-center" },
-                React.createElement("img", { src: QR_CODE_URL, alt: "UPI QR Code", className: "w-48 h-48" })
+            React.createElement("div", { className: "text-center mb-6" },
+                React.createElement("p", { className: "text-sm text-gray-400" }, "Your Booking ID"),
+                React.createElement("p", { className: "text-2xl font-bold text-yellow-400 tracking-widest bg-zinc-900 py-2 rounded-md font-mono" }, booking.id),
+                React.createElement("p", { className: "text-xs text-yellow-500 mt-2" }, "Please add this ID to your UPI payment notes/remarks.")
             ),
-            React.createElement("p", { className: "text-center text-gray-300 mt-2 font-mono" }, `UPI ID: ${UPI_ID}`),
-            React.createElement("div", { className: "relative my-6" },
-                React.createElement("div", { className: "absolute inset-0 flex items-center", "aria-hidden": "true" }, React.createElement("div", { className: "w-full border-t border-zinc-600" })),
-                React.createElement("div", { className: "relative flex justify-center" }, React.createElement("span", { className: "bg-zinc-800 px-2 text-sm text-gray-400" }, "OR"))
-            ),
-            React.createElement("h3", { className: "text-lg font-semibold text-white mb-2" }, "Send Payment Request"),
-            React.createElement("div", { className: "flex space-x-2" },
-                React.createElement("input", { 
-                    type: "text", 
-                    value: userUpiId,
-                    onChange: (e) => setUserUpiId(e.target.value),
-                    placeholder: "Enter your UPI ID", 
-                    className: "flex-grow p-3 bg-zinc-700 text-white rounded-lg border border-zinc-600 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
-                }),
-                React.createElement("button", { onClick: handleDesktopRequest, className: "px-4 py-2 font-medium text-white bg-zinc-600 rounded-md hover:bg-yellow-500 transition-colors" }, "Request")
-            ),
-            React.createElement("div", { className: "mt-8" },
-                React.createElement("button", { 
-                    onClick: handlePaymentConfirmed,
-                    className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
-                }, "I Have Completed The Payment")
-            )
-        )
-    );
-
-    const renderMobileView = () => (
-        React.createElement(React.Fragment, null,
-            !paymentInitiated ? (
+            isMobile ? (
                 React.createElement("button", { onClick: handleMobilePay, className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-3" },
                     React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-8 w-8", viewBox: "0 0 24 24", fill: "currentColor" }, React.createElement("path", { d: "M16.5 13.5h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zm-9-4h9c.83 0 1.5-.67 1.5-1.5S17.33 6.5 16.5 6.5h-9C6.67 6.5 6 7.17 6 8s.67 1.5 1.5 1.5zm9 8h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zM22 2H2v20h20V2zm-2 18H4V4h16v16z"})),
-                    React.createElement("span", null, "Pay with UPI App")
+                    React.createElement("span", null, `Pay ₹${amount.toLocaleString('en-IN')} with UPI`)
                 )
             ) : (
-                React.createElement("div", { className: "text-center" },
-                    React.createElement("p", { className: "text-gray-300 mb-4" }, "After completing the payment in your UPI app, click the button below to confirm your booking."),
-                    React.createElement("button", { onClick: handlePaymentConfirmed, className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors" },
-                        "Confirm Booking"
-                    )
+                React.createElement("div", { className: "bg-white p-4 rounded-lg flex justify-center" },
+                    React.createElement("img", { src: QR_CODE_URL, alt: "UPI QR Code", className: "w-48 h-48" })
                 )
+            ),
+            React.createElement("div", { className: "mt-6 text-center bg-zinc-900/50 p-4 rounded-lg" },
+                React.createElement("div", { className: "flex justify-center items-center space-x-2" },
+                    React.createElement("div", { className: "animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-400" }),
+                    React.createElement("p", { className: "text-gray-300" }, "Waiting for payment confirmation...")
+                ),
+                React.createElement("p", { className: "text-xs text-gray-500 mt-2" }, "This window will close automatically once payment is verified.")
             )
         )
     );
@@ -302,11 +274,10 @@ const UpiPaymentModal = ({ isOpen, onClose, amount, onPaymentSuccess }) => {
             React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative" },
                 React.createElement("button", { onClick: onClose, className: "absolute top-3 right-4 text-gray-400 hover:text-white transition-colors text-3xl font-light" }, "×"),
                 React.createElement("div", { className: "text-center mb-4" },
-                    React.createElement("h2", { className: "text-2xl font-bold text-yellow-400" }, "Complete Your Payment"),
-                    React.createElement("p", { className: "text-gray-400" }, "Total Amount to Pay: ", React.createElement("span", { className: "font-bold text-white" }, `₹${amount.toLocaleString('en-IN')}`))
+                    React.createElement("h2", { className: "text-2xl font-bold text-white" }, "Complete Your Payment")
                 ),
                 React.createElement("div", { className: "mt-6" },
-                    isMobile ? renderMobileView() : renderDesktopView()
+                    renderPaymentView()
                 )
             )
         )
@@ -315,7 +286,7 @@ const UpiPaymentModal = ({ isOpen, onClose, amount, onPaymentSuccess }) => {
 
 
 // --- START OF components/BookingForm.tsx ---
-const BookingForm = ({ plan, addBooking, getUnavailableHours, onCancel }) => {
+const BookingForm = ({ plan, addBooking, bookings, getUnavailableHours, onCancel }) => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -325,6 +296,7 @@ const BookingForm = ({ plan, addBooking, getUnavailableHours, onCancel }) => {
   const [phone, setPhone] = useState('');
   const [formError, setFormError] = useState('');
   const [showUpiModal, setShowUpiModal] = useState(false);
+  const [pendingBooking, setPendingBooking] = useState(null);
 
   useEffect(() => {
     setStartTime('');
@@ -390,11 +362,8 @@ const BookingForm = ({ plan, addBooking, getUnavailableHours, onCancel }) => {
         }
         return;
     }
-    setShowUpiModal(true);
-  };
-  
-  const handlePaymentSuccess = () => {
-    addBooking({
+    
+    const newBooking = addBooking({
       planId: plan.id,
       planName: plan.name,
       name,
@@ -408,7 +377,9 @@ const BookingForm = ({ plan, addBooking, getUnavailableHours, onCancel }) => {
       paymentOption,
       bookedVia: 'website'
     });
-    setShowUpiModal(false);
+
+    setPendingBooking(newBooking);
+    setShowUpiModal(true);
   };
 
   return (
@@ -461,7 +432,7 @@ const BookingForm = ({ plan, addBooking, getUnavailableHours, onCancel }) => {
                         React.createElement("p", { className: "font-bold" }, "Full Payment"), React.createElement("p", { className: "text-2xl font-bold" }, `₹${totalCost.toLocaleString('en-IN')}`), React.createElement("p", { className: "text-sm text-yellow-400" }, "No hassle on shoot day")
                     )
                 ),
-                React.createElement("div", { className: "mt-4 p-4 bg-zinc-800 rounded-lg" },
+                 React.createElement("div", { className: "mt-4 p-4 bg-zinc-800 rounded-lg" },
                     React.createElement("p", { className: "text-sm text-gray-400" }, "Payment will be processed via UPI. We support all major UPI apps.")
                 )
               ),
@@ -474,11 +445,11 @@ const BookingForm = ({ plan, addBooking, getUnavailableHours, onCancel }) => {
           )
         )
       ),
-      React.createElement(UpiPaymentModal, {
+      pendingBooking && React.createElement(UpiPaymentModal, {
         isOpen: showUpiModal,
         onClose: () => setShowUpiModal(false),
         amount: amountToPay,
-        onPaymentSuccess: handlePaymentSuccess
+        booking: pendingBooking
       })
     )
   );
@@ -486,7 +457,7 @@ const BookingForm = ({ plan, addBooking, getUnavailableHours, onCancel }) => {
 
 
 // --- START OF components/AdminPanel.tsx ---
-const AdminPanel = ({ bookings, addBooking, getUnavailableHours }) => {
+const AdminPanel = ({ bookings, addBooking, getUnavailableHours, confirmPayment }) => {
   const [planId, setPlanId] = useState(PRICING_PLANS[0].id);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('');
@@ -569,16 +540,71 @@ const AdminPanel = ({ bookings, addBooking, getUnavailableHours }) => {
       endTime,
       duration,
       totalCost: plan.price * duration,
-      amountPaid: plan.price * duration, // Assume full payment for phone bookings
+      amountPaid: plan.price * duration,
       paymentOption: 'full',
       bookedVia: 'phone',
     });
-    
-    alert(`Booking added for ${name} on ${date} from ${startTime} to ${endTime}`);
     resetForm();
   };
   
-  const sortedBookings = [...bookings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.startTime.localeCompare(b.startTime));
+  const pendingBookings = bookings
+    .filter(b => b.status === 'pending')
+    .sort((a, b) => parseInt(b.id.split('-')[1]) - parseInt(a.id.split('-')[1]));
+
+  const confirmedBookings = bookings
+    .filter(b => b.status === 'confirmed')
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.startTime.localeCompare(b.startTime));
+
+  const BookingsTable = ({ title, bookingList, isPending = false }) => (
+    React.createElement("div", { className: "bg-zinc-800 p-6 rounded-lg shadow-lg border border-zinc-700" },
+      React.createElement("h2", { className: "text-2xl font-bold text-yellow-400 mb-4" }, title),
+      React.createElement("div", { className: "overflow-x-auto" },
+        React.createElement("table", { className: "min-w-full divide-y divide-zinc-700" },
+          React.createElement("thead", { className: "bg-zinc-700/50" },
+            React.createElement("tr", null,
+              React.createElement("th", { scope: "col", className: "px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" }, "Client"),
+              React.createElement("th", { scope: "col", className: "px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" }, "Date & Time"),
+              React.createElement("th", { scope: "col", className: "px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" }, "Details"),
+              isPending && React.createElement("th", { scope: "col", className: "px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" }, "Action")
+            )
+          ),
+          React.createElement("tbody", { className: "bg-zinc-800 divide-y divide-zinc-700" },
+            bookingList.length > 0 ? bookingList.map(booking => (
+              React.createElement("tr", { key: booking.id, className: "hover:bg-zinc-700/50" },
+                React.createElement("td", { className: "px-4 py-4 whitespace-nowrap text-sm font-medium text-white" },
+                    React.createElement("div", null, booking.name),
+                    React.createElement("div", { className: "text-xs text-gray-400" }, booking.phone),
+                    React.createElement("div", { className: "text-xs font-mono text-yellow-500 mt-1" }, booking.id)
+                ),
+                React.createElement("td", { className: "px-4 py-4 whitespace-nowrap text-sm text-gray-300" },
+                  React.createElement("div", null, new Date(booking.date).toLocaleDateString('en-GB')),
+                  React.createElement("div", { className: "text-xs" }, `${booking.startTime} - ${booking.endTime}`)
+                ),
+                React.createElement("td", { className: "px-4 py-4 whitespace-nowrap text-sm text-gray-300" },
+                  React.createElement("div", null, booking.planName),
+                  React.createElement("div", { className: "text-xs" }, `Paid: ₹${booking.amountPaid.toLocaleString('en-IN')} (${booking.paymentOption})`),
+                  React.createElement("span", { className: `mt-1 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.bookedVia === 'phone' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}` },
+                    booking.bookedVia
+                  )
+                ),
+                isPending && (
+                  React.createElement("td", { className: "px-4 py-4 whitespace-nowrap text-sm" },
+                    React.createElement("button", { onClick: () => confirmPayment(booking.id), className: "bg-green-600 text-white font-bold py-2 px-3 rounded-lg hover:bg-green-700 transition-colors text-xs" },
+                        "Confirm Payment"
+                    )
+                  )
+                )
+              )
+            )) : (
+              React.createElement("tr", null,
+                React.createElement("td", { colSpan: isPending ? 4 : 3, className: "text-center py-8 text-gray-400" }, "No bookings in this category.")
+              )
+            )
+          )
+        )
+      )
+    )
+  );
 
   return (
     React.createElement("div", { className: "container mx-auto px-4 sm:px-6 lg:px-8 py-12" },
@@ -587,7 +613,7 @@ const AdminPanel = ({ bookings, addBooking, getUnavailableHours }) => {
       React.createElement("div", { className: "grid lg:grid-cols-3 gap-8" },
         React.createElement("div", { className: "lg:col-span-1 bg-zinc-800 p-6 rounded-lg shadow-lg border border-zinc-700 h-fit" },
           React.createElement("h2", { className: "text-2xl font-bold text-yellow-400 mb-4" }, "Add Manual Booking"),
-          React.createElement("p", { className: "text-sm text-gray-400 mb-6" }, "For bookings made over the phone or in person."),
+          React.createElement("p", { className: "text-sm text-gray-400 mb-6" }, "For confirmed bookings made over the phone."),
           React.createElement("form", { onSubmit: handleManualBooking, className: "space-y-4" },
             React.createElement("div", null,
               React.createElement("label", { htmlFor: "admin-name", className: "block text-sm font-medium text-gray-300" }, "Client Name"),
@@ -625,48 +651,16 @@ const AdminPanel = ({ bookings, addBooking, getUnavailableHours }) => {
             ),
             error && React.createElement("p", { className: "text-red-400 text-sm" }, error),
             React.createElement("button", { type: "submit", className: "w-full bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-700 transition-colors" },
-              "Add Booking"
+              "Add Confirmed Booking"
             )
           )
         ),
-        React.createElement("div", { className: "lg:col-span-2 bg-zinc-800 p-6 rounded-lg shadow-lg border border-zinc-700" },
-          React.createElement("h2", { className: "text-2xl font-bold text-yellow-400 mb-4" }, "Upcoming Bookings"),
-          React.createElement("div", { className: "overflow-x-auto" },
-            React.createElement("table", { className: "min-w-full divide-y divide-zinc-700" },
-              React.createElement("thead", { className: "bg-zinc-700/50" },
-                React.createElement("tr", null,
-                  React.createElement("th", { scope: "col", className: "px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" }, "Client"),
-                  React.createElement("th", { scope: "col", className: "px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" }, "Date"),
-                  React.createElement("th", { scope: "col", className: "px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" }, "Time"),
-                  React.createElement("th", { scope: "col", className: "px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" }, "Package"),
-                  React.createElement("th", { scope: "col", className: "px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" }, "Booked Via")
-                )
-              ),
-              React.createElement("tbody", { className: "bg-zinc-800 divide-y divide-zinc-700" },
-                sortedBookings.length > 0 ? sortedBookings.map(booking => (
-                  React.createElement("tr", { key: booking.id, className: "hover:bg-zinc-700/50" },
-                    React.createElement("td", { className: "px-4 py-4 whitespace-nowrap text-sm font-medium text-white" },
-                        React.createElement("div", null, booking.name),
-                        React.createElement("div", { className: "text-xs text-gray-400" }, booking.phone)
-                    ),
-                    React.createElement("td", { className: "px-4 py-4 whitespace-nowrap text-sm text-gray-300" }, new Date(booking.date).toLocaleDateString('en-GB')),
-                    React.createElement("td", { className: "px-4 py-4 whitespace-nowrap text-sm text-gray-300" }, `${booking.startTime} - ${booking.endTime}`),
-                    React.createElement("td", { className: "px-4 py-4 whitespace-nowrap text-sm text-gray-300" }, booking.planName),
-                    React.createElement("td", { className: "px-4 py-4 whitespace-nowrap text-sm" },
-                      React.createElement("span", { className: `px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${booking.bookedVia === 'phone' ? 'bg-purple-200 text-purple-800' : 'bg-green-200 text-green-800'}` },
-                        booking.bookedVia
-                      )
-                    )
-                  )
-                )) : (
-                  React.createElement("tr", null,
-                    React.createElement("td", { colSpan: 5, className: "text-center py-8 text-gray-400" }, "No upcoming bookings.")
-                  )
-                )
-              )
-            )
-          )
+        
+        React.createElement("div", { className: "lg:col-span-2 space-y-8" },
+            React.createElement(BookingsTable, { title: "Pending Confirmation", bookingList: pendingBookings, isPending: true }),
+            React.createElement(BookingsTable, { title: "Confirmed Bookings", bookingList: confirmedBookings })
         )
+
       )
     )
   );
@@ -768,6 +762,7 @@ const App = () => {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [confirmedBooking, setConfirmedBooking] = useState(null);
+  const [isFadingOut, setIsFadingOut] = useState(false);
   
   const [admins, setAdmins] = useState([]);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -783,7 +778,6 @@ const App = () => {
           adminData = JSON.parse(storedAdmins);
       }
 
-      // Ensure the default admin exists
       if (!adminData.some(a => a.userId === 'psmember@01')) {
           adminData.push({ id: 'default_admin', userId: 'psmember@01', password: 'pswork@01' });
           localStorage.setItem('studioAdmins', JSON.stringify(adminData));
@@ -802,7 +796,7 @@ const App = () => {
     try {
       localStorage.setItem('studioBookings', JSON.stringify(bookings));
     } catch (error) {
-      console.error("Failed to save bookings to localStorage", error);
+        console.error("Failed to save bookings to localStorage", error);
     }
   }, [bookings]);
   
@@ -826,21 +820,48 @@ const App = () => {
   }, []);
 
   const addBooking = useCallback((booking) => {
-    const newBooking = { ...booking, id: new Date().toISOString() };
+    const bookingId = `BK-${Date.now()}`;
+    const newBooking = { ...booking, id: bookingId, status: 'pending' };
     setBookings(prev => [...prev, newBooking]);
-    if(currentView === View.USER) {
-      setConfirmedBooking(newBooking);
-      setTimeout(() => {
-        setConfirmedBooking(null);
-        setSelectedPlan(null);
-      }, 6000);
-    }
-  }, [currentView]);
+    return newBooking;
+  }, []);
+  
+  const addManualBooking = useCallback((booking) => {
+    const bookingId = `BK-${Date.now()}`;
+    const newBooking = { ...booking, id: bookingId, status: 'confirmed' };
+    setBookings(prev => [...prev, newBooking]);
+    alert(`Booking added for ${newBooking.name} on ${newBooking.date}`);
+  }, []);
+
+  const confirmPayment = useCallback((bookingId) => {
+      let confirmed = null;
+      setBookings(prev => prev.map(b => {
+          if (b.id === bookingId) {
+              confirmed = { ...b, status: 'confirmed' };
+              return confirmed;
+          }
+          return b;
+      }));
+      
+      if (confirmed) {
+          if(confirmed.bookedVia === 'website') {
+             setConfirmedBooking(confirmed);
+             setIsFadingOut(false);
+             setTimeout(() => {
+                setIsFadingOut(true);
+             }, 5000);
+             setTimeout(() => {
+                setConfirmedBooking(null);
+                setSelectedPlan(null);
+             }, 6000);
+          }
+      }
+  }, []);
 
   const getUnavailableHours = useCallback((date) => {
     const bookedHours = new Set();
     bookings
-        .filter(b => b.date === date)
+        .filter(b => b.date === date && b.status === 'confirmed')
         .forEach(b => {
             const startHour = parseInt(b.startTime.split(':')[0], 10);
             const endHour = parseInt(b.endTime.split(':')[0], 10);
@@ -886,23 +907,24 @@ const App = () => {
               React.createElement("div", { id: "booking-section" },
                 React.createElement(BookingForm, { 
                   plan: selectedPlan, 
-                  addBooking: addBooking, 
+                  addBooking: addBooking,
+                  bookings: bookings,
                   getUnavailableHours: getUnavailableHours,
                   onCancel: () => setSelectedPlan(null)
                 })
               )
             ),
              confirmedBooking && (
-                React.createElement("div", { className: "fixed top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-green-500 text-white p-6 rounded-lg shadow-2xl z-50 text-center w-11/12 max-w-md" },
+                React.createElement("div", { className: `fixed top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-green-500 text-white p-6 rounded-lg shadow-2xl z-50 text-center w-11/12 max-w-md transition-opacity duration-1000 ${isFadingOut ? 'opacity-0' : 'opacity-100'}` },
                     React.createElement("h3", { className: "text-2xl font-bold mb-2" }, "Booking Confirmed!"),
-                    React.createElement("p", null, `Thank you, ${confirmedBooking.name}! A confirmation has been sent to ${confirmedBooking.phone}.`),
+                    React.createElement("p", null, `Thank you, ${confirmedBooking.name}! Your booking is secured.`),
                     React.createElement("p", { className: "text-sm mt-2 font-semibold" }, `(${new Date(confirmedBooking.date).toLocaleDateString('en-GB')} from ${confirmedBooking.startTime} to ${confirmedBooking.endTime})`)
                 )
             )
           )
         ) : (
           isAuthenticated ? (
-            React.createElement(AdminPanel, { bookings: bookings, addBooking: addBooking, getUnavailableHours: getUnavailableHours })
+            React.createElement(AdminPanel, { bookings: bookings, addBooking: addManualBooking, getUnavailableHours: getUnavailableHours, confirmPayment: confirmPayment })
           ) : (
             React.createElement(Auth, { onLogin: handleLogin })
           )
