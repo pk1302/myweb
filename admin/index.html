@@ -56,30 +56,29 @@
       const [adminMsg, setAdminMsg] = useState(null);
       const prevPendingIds = React.useRef([]);
       const [playNotif, setPlayNotif] = useState(false);
+      const [audioReady, setAudioReady] = useState(false);
 
       // Listen for bookings and trigger sound on new pending
       useEffect(() => {
-        if (isAuthenticated) {
+        if (isAuthenticated && audioReady) {
           return listenBookings((bks) => {
             const pendingBookings = bks.filter(b => b.status === "pending");
             const prevIds = prevPendingIds.current;
-            // If there is at least one pending, play sound
             if (pendingBookings.length > 0) {
               setPlayNotif(true);
             } else {
               setPlayNotif(false);
             }
-            // Update ref for next time
             prevPendingIds.current = pendingBookings.map(b => b.id);
             setBookings(bks);
           });
         }
-      }, [isAuthenticated]);
+      }, [isAuthenticated, audioReady]);
 
-      // Play/stop audio on playNotif state change
+      // Play/stop audio on playNotif state change, but only if audioReady
       useEffect(() => {
         const audio = document.getElementById("notif-sound");
-        if (!audio) return;
+        if (!audio || !audioReady) return;
         if (playNotif) {
           audio.currentTime = 0;
           audio.play();
@@ -87,7 +86,7 @@
           audio.pause();
           audio.currentTime = 0;
         }
-      }, [playNotif]);
+      }, [playNotif, audioReady]);
 
       function handleLogin(e) {
         e.preventDefault();
@@ -107,6 +106,7 @@
         });
       }
 
+      // Step 1: Login
       if (!isAuthenticated) {
         return (
           React.createElement("div", { className: "max-w-sm mx-auto mt-24 bg-zinc-800 p-8 rounded-xl shadow-lg border border-zinc-700" },
@@ -122,6 +122,31 @@
               loginError && React.createElement("div", { className: "text-red-400 mb-2" }, loginError),
               React.createElement("button", { type: "submit", className: "w-full bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors" }, "Login")
             )
+          )
+        );
+      }
+
+      // Step 2: Enable notifications (required for browser audio)
+      if (!audioReady) {
+        return (
+          React.createElement("div", { className: "flex flex-col items-center justify-center min-h-screen" },
+            React.createElement("button", {
+              className: "bg-yellow-500 px-6 py-3 rounded font-bold text-black text-xl",
+              onClick: () => {
+                const audio = document.getElementById("notif-sound");
+                if (audio) {
+                  audio.play().then(() => {
+                    audio.pause();
+                    setAudioReady(true);
+                  }).catch(() => {
+                    setAudioReady(true);
+                  });
+                } else {
+                  setAudioReady(true);
+                }
+              }
+            }, "Start Notifications"),
+            React.createElement("p", { className: "mt-4 text-gray-400" }, "Click to enable sound notifications for new bookings.")
           )
         );
       }
