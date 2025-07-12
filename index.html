@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Possible Studio Booking (Enhanced)</title>
+  <title>Possible Studio Booking (UPI QR Only)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <style>body { font-family: 'Inter', sans-serif; }</style>
@@ -394,14 +394,20 @@
       );
     }
 
+    // --- UPI Payment Modal: QR code and UPI deep link only ---
     function UpiPaymentModal({ isOpen, onClose, amount, booking }) {
       const UPI_ID = 'qr.possible@sib';
       const STUDIO_NAME = 'Possible Studio';
-      const QR_CODE_URL = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=qr.possible@sib&pn=Possible%20Studio&am=' + amount + '&cu=INR&tn=Booking%20ID%20' + (booking.id || '');
-      const [isMobile, setIsMobile] = useState(false);
+      const QR_CODE_URL = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' +
+        encodeURIComponent(
+          `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${amount}&cu=INR&tn=Booking%20ID%20${booking.id || ''}`
+        );
+      const [isMobile, setIsMobile] = React.useState(false);
+      const [isIOS, setIsIOS] = React.useState(false);
 
-      useEffect(() => {
+      React.useEffect(() => {
         setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+        setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent));
       }, []);
 
       if (!isOpen || !booking) return null;
@@ -423,17 +429,23 @@
               React.createElement("p", { className: "text-2xl font-bold text-yellow-400 tracking-widest bg-zinc-900 py-2 rounded-md font-mono" }, booking.id || ""),
               React.createElement("p", { className: "text-xs text-yellow-500 mt-2" }, "Please add this ID to your UPI payment notes/remarks.")
             ),
-            isMobile ? (
-              React.createElement("button", { onClick: handleMobilePay, className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-3" },
+            isIOS && (
+              React.createElement("div", { className: "mb-4 text-yellow-400 font-semibold" },
+                "On iPhone, only one UPI app (like WhatsApp or Paytm) may open automatically.",
+                React.createElement("br", null),
+                "For best results, please scan the QR code below with your preferred UPI app."
+              )
+            ),
+            isMobile && !isIOS && (
+              React.createElement("button", { onClick: handleMobilePay, className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-3 mb-4" },
                 React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-8 w-8", viewBox: "0 0 24 24", fill: "currentColor" },
                   React.createElement("path", { d: "M16.5 13.5h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zm-9-4h9c.83 0 1.5-.67 1.5-1.5S17.33 6.5 16.5 6.5h-9C6.67 6.5 6 7.17 6 8s.67 1.5 1.5 1.5zm9 8h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zM22 2H2v20h20V2zm-2 18H4V4h16v16z" })
                 ),
                 React.createElement("span", null, `Pay ₹${amount.toLocaleString('en-IN')} with UPI`)
               )
-            ) : (
-              React.createElement("div", { className: "bg-white p-4 rounded-lg flex justify-center" },
-                React.createElement("img", { src: QR_CODE_URL, alt: "UPI QR Code", className: "w-48 h-48 object-contain" })
-              )
+            ),
+            React.createElement("div", { className: "bg-white p-4 rounded-lg flex justify-center mb-2" },
+              React.createElement("img", { src: QR_CODE_URL, alt: "UPI QR Code", className: "w-48 h-48 object-contain" })
             ),
             React.createElement("div", { className: "mt-6 text-center bg-zinc-900/50 p-4 rounded-lg" },
               React.createElement("div", { className: "flex justify-center items-center space-x-2" },
@@ -446,6 +458,8 @@
         )
       );
     }
+
+    // ... The rest of the code (AdminPanel, EditBookingModal, App) is unchanged from previous versions ...
 
     function EditBookingModal({ booking, onSave, onCancel }) {
       const [date, setDate] = useState(booking.date);
