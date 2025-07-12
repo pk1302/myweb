@@ -238,6 +238,8 @@ const UserPage = ({ onSelectPlan, selectedPlan, setSelectedPlan, addBooking, boo
 
 
 // --- START OF App.tsx ---
+// This is the main component that holds the state and logic.
+// It is wrapped by BrowserRouter in the final render call.
 const App = () => {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [bookings, setBookings] = useState([]);
@@ -318,30 +320,33 @@ const App = () => {
 
   return (
     React.createElement("div", { className: "min-h-screen bg-zinc-900 text-gray-100 flex flex-col" },
-      React.createElement(BrowserRouter, null,
-        React.createElement(Header, { isAuthenticated: isAuthenticated, logout: handleLogout }),
-        React.createElement("main", { className: "flex-grow" },
-          React.createElement(Routes, null,
-            React.createElement(Route, { path: "/", element: React.createElement(UserPage, { onSelectPlan: handleSelectPlan, selectedPlan: selectedPlan, setSelectedPlan: setSelectedPlan, addBooking: addBooking, bookings: bookings, getUnavailableHours: getUnavailableHours, confirmedBooking: confirmedBooking, isFadingOut: isFadingOut }) }),
-            React.createElement(Route, { path: "/admin", element: isAuthenticated ? React.createElement(AdminPanel, { bookings: bookings, addBooking: addManualBooking, getUnavailableHours: getUnavailableHours, confirmPayment: confirmPayment }) : React.createElement(Navigate, { to: "/login", replace: true }) }),
-            React.createElement(Route, { path: "/login", element: !isAuthenticated ? React.createElement(Auth, { onLogin: handleLoginAndRedirect }) : React.createElement(Navigate, { to: "/admin", replace: true }) })
-          )
-        ),
-        React.createElement(Footer, null)
-      )
+      React.createElement(Header, { isAuthenticated: isAuthenticated, logout: handleLogout }),
+      React.createElement("main", { className: "flex-grow" },
+        React.createElement(Routes, null,
+          React.createElement(Route, { path: "/", element: React.createElement(UserPage, { onSelectPlan: handleSelectPlan, selectedPlan: selectedPlan, setSelectedPlan: setSelectedPlan, addBooking: addBooking, bookings: bookings, getUnavailableHours: getUnavailableHours, confirmedBooking: confirmedBooking, isFadingOut: isFadingOut }) }),
+          React.createElement(Route, { path: "/admin", element: isAuthenticated ? React.createElement(AdminPanel, { bookings: bookings, addBooking: addManualBooking, getUnavailableHours: getUnavailableHours, confirmPayment: confirmPayment }) : React.createElement(Navigate, { to: "/login", replace: true }) }),
+          React.createElement(Route, { path: "/login", element: !isAuthenticated ? React.createElement(Auth, { onLogin: handleLoginAndRedirect }) : React.createElement(Navigate, { to: "/admin", replace: true }) })
+        )
+      ),
+      React.createElement(Footer, null)
     )
   );
 };
 
 // --- START OF index.tsx ---
+// This is the main entry point that renders the App.
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 const root = ReactDOM.createRoot(rootElement);
+
+// The BrowserRouter must wrap the App component here to provide routing context.
 root.render(
   React.createElement(React.StrictMode, null,
-    React.createElement(App, null)
+    React.createElement(BrowserRouter, null,
+        React.createElement(App, null)
+    )
   )
 );
     </script>
