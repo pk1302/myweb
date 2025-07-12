@@ -3,21 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Studio Booking (Firebase v11+)</title>
+  <title>Studio Booking (Firebase Global)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <style>body { font-family: 'Inter', sans-serif; }</style>
+  <!-- Firebase compat SDKs (NO type="module") -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <!-- React UMD -->
+  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/react-router-dom@5.3.4/umd/react-router-dom.min.js"></script>
 </head>
 <body class="bg-zinc-900 text-white">
   <div id="root"></div>
-  <script type="module">
-    // Firebase v11+ modular imports
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-    import { getDatabase, ref, push, update, onValue } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
-    import React from "https://esm.sh/react@17.0.2";
-    import ReactDOM from "https://esm.sh/react-dom@17.0.2";
-    import * as ReactRouterDOM from "https://esm.sh/react-router-dom@5.3.4";
-
+  <script>
     // --- Firebase Config ---
     const firebaseConfig = {
       apiKey: "AIzaSyCzSeK0Mare4CtM4pFqwSAO_YmLcQEGJOo",
@@ -29,8 +29,8 @@
       appId: "1:464295194306:web:d8ec45509b0e4241a9955b",
       measurementId: "G-LZEK0QJBMG"
     };
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
     // --- React setup ---
     const { useState, useEffect, useMemo, useCallback } = React;
@@ -38,21 +38,22 @@
 
     // --- Booking CRUD with Firebase ---
     function createBooking(booking) {
-      return push(ref(db, "bookings"), booking);
+      return db.ref('bookings').push(booking);
     }
     function updateBookingStatus(id, status) {
-      return update(ref(db, "bookings/" + id), { status });
+      return db.ref('bookings/' + id).update({ status });
     }
     function listenBookings(callback) {
-      const bookingsRef = ref(db, "bookings");
-      return onValue(bookingsRef, (snapshot) => {
+      const ref = db.ref('bookings');
+      ref.on('value', snapshot => {
         const val = snapshot.val() || {};
         const bookings = Object.entries(val).map(([id, data]) => ({ id, ...data }));
         callback(bookings);
       });
+      return () => ref.off();
     }
 
-    // --- App UI Components (as in previous answers) ---
+    // --- UI Components ---
     const PRICING_PLANS = [
       { id: 'basic', name: 'Basic Studio', price: 2000, description: 'Just the space. Bring your own gear and create freely.', features: ['Studio Space Access'] },
       { id: 'standard', name: 'Standard Package', price: 3500, description: 'A complete setup for most projects, cameraman included.', features: ['Studio Space Access', '2 Professional Cameras', 'Standard Lighting Kit', '2 Shure Microphones', 'Dedicated Cameraman'] },
