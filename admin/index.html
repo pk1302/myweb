@@ -7,19 +7,23 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
   <style>body { font-family: 'Inter', sans-serif; }</style>
+
   <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
   <!-- React UMD -->
   <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
 </head>
 <body class="bg-zinc-900 text-white min-h-screen">
   <div id="root"></div>
-  <!-- Place notification.mp3 in the same folder as this file -->
-  <audio id="notif-sound" src="notification.mp3" preload="auto" loop></audio>
+
+  <!-- Notification Sound -->
+  <audio id="notif-sound" src="notification.mp3" preload="auto" loop type="audio/mpeg"></audio>
+
   <script>
-    // --- Firebase Config (same as user site) ---
+    // Firebase Config
     const firebaseConfig = {
       apiKey: "AIzaSyCzSeK0Mare4CtM4pFqwSAO_YmLcQEGJOo",
       authDomain: "studio-booking-608cc.firebaseapp.com",
@@ -33,11 +37,12 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     function updateBooking(id, updates) {
       return db.ref('bookings/' + id).update(updates);
     }
+
     function listenBookings(callback) {
       const ref = db.ref('bookings');
       ref.on('value', snapshot => {
@@ -54,18 +59,19 @@
       const [loginError, setLoginError] = useState('');
       const [bookings, setBookings] = useState([]);
       const [adminMsg, setAdminMsg] = useState(null);
-      const prevPendingIds = React.useRef([]);
+      const prevPendingIds = useRef([]);
       const [playNotif, setPlayNotif] = useState(false);
       const [audioUnlocked, setAudioUnlocked] = useState(false);
 
-      // Listen for bookings and trigger sound on new pending
+      // Handle bookings and trigger notification
       useEffect(() => {
         if (isAuthenticated && audioUnlocked) {
           return listenBookings((bks) => {
             const pendingBookings = bks.filter(b => b.status === "pending");
             const prevIds = prevPendingIds.current;
-            if (pendingBookings.length > 0) {
+            if (pendingBookings.length > 0 && JSON.stringify(prevIds) !== JSON.stringify(pendingBookings.map(b => b.id))) {
               setPlayNotif(true);
+              console.log("🔔 New pending booking(s) detected.");
             } else {
               setPlayNotif(false);
             }
@@ -75,13 +81,18 @@
         }
       }, [isAuthenticated, audioUnlocked]);
 
-      // Play/stop audio on playNotif state change, only if audioUnlocked
+      // Play or stop sound based on state
       useEffect(() => {
         const audio = document.getElementById("notif-sound");
         if (!audio || !audioUnlocked) return;
+
         if (playNotif) {
+          audio.muted = false;
+          audio.volume = 1.0;
           audio.currentTime = 0;
-          audio.play();
+          audio.play().catch(err => {
+            console.error("🔇 Audio play failed:", err);
+          });
         } else {
           audio.pause();
           audio.currentTime = 0;
@@ -90,7 +101,6 @@
 
       function handleLogin(e) {
         e.preventDefault();
-        // Change password here!
         if (password === 'admin123') {
           setIsAuthenticated(true);
           setLoginError('');
@@ -106,7 +116,6 @@
         });
       }
 
-      // Step 1: Login
       if (!isAuthenticated) {
         return (
           React.createElement("div", { className: "max-w-sm mx-auto mt-24 bg-zinc-800 p-8 rounded-xl shadow-lg border border-zinc-700" },
@@ -126,7 +135,6 @@
         );
       }
 
-      // Step 2: Unlock audio (required for browser audio)
       if (!audioUnlocked) {
         return (
           React.createElement("div", { className: "flex flex-col items-center justify-center min-h-screen bg-zinc-900 text-white" },
@@ -135,15 +143,18 @@
               onClick: () => {
                 const audio = document.getElementById("notif-sound");
                 if (audio) {
-                  audio.play()
-                    .then(() => {
-                      audio.pause();
-                      setAudioUnlocked(true);
-                    })
-                    .catch(() => {
-                      setAudioUnlocked(true);
-                    });
+                  audio.muted = false;
+                  audio.volume = 1.0;
+                  audio.play().then(() => {
+                    audio.pause();
+                    setAudioUnlocked(true);
+                    console.log("🔓 Audio unlocked.");
+                  }).catch(err => {
+                    console.warn("⚠️ Manual audio unlock failed:", err);
+                    setAudioUnlocked(true);
+                  });
                 } else {
+                  console.warn("⚠️ Audio element not found");
                   setAudioUnlocked(true);
                 }
               }
@@ -153,11 +164,10 @@
         );
       }
 
-      // Pop-up modal for new booking notification
       const showNotifModal = playNotif && bookings.some(b => b.status === "pending");
 
       return (
-        React.createElement("div", { className: "container mx-auto px-4 sm:px-6 lg:px-8 py-8" },
+        React.createElement("div", { className: "container mx-auto px-4 py-8" },
           React.createElement("h2", { className: "text-2xl font-bold mb-6 text-white" }, "All Bookings"),
           adminMsg && React.createElement("div", { className: "mb-4 p-4 bg-green-800 text-green-200 rounded" }, adminMsg),
           bookings.length === 0
@@ -165,20 +175,22 @@
             : React.createElement("table", { className: "w-full text-sm bg-zinc-800 rounded-lg overflow-hidden" },
                 React.createElement("thead", null,
                   React.createElement("tr", { className: "bg-zinc-700 text-yellow-400" },
-                    React.createElement("th", { className: "p-2" }, "Name"),
-                    React.createElement("th", { className: "p-2" }, "Phone"),
-                    React.createElement("th", { className: "p-2" }, "Plan"),
-                    React.createElement("th", { className: "p-2" }, "Date"),
-                    React.createElement("th", { className: "p-2" }, "Time"),
-                    React.createElement("th", { className: "p-2" }, "Amount"),
-                    React.createElement("th", { className: "p-2" }, "Paid"),
-                    React.createElement("th", { className: "p-2" }, "Status"),
-                    React.createElement("th", { className: "p-2" }, "Action")
+                    ["Name", "Phone", "Plan", "Date", "Time", "Amount", "Paid", "Status", "Action"].map(col =>
+                      React.createElement("th", { className: "p-2", key: col }, col)
+                    )
                   )
                 ),
                 React.createElement("tbody", null,
                   bookings.slice().reverse().map(b =>
-                    React.createElement("tr", { key: b.id, className: b.status === "cancelled" ? "bg-red-900 text-red-200" : b.status === "pending" ? "bg-zinc-700" : "bg-zinc-800" },
+                    React.createElement("tr", {
+                      key: b.id,
+                      className:
+                        b.status === "cancelled"
+                          ? "bg-red-900 text-red-200"
+                          : b.status === "pending"
+                          ? "bg-zinc-700"
+                          : "bg-zinc-800"
+                    },
                       React.createElement("td", { className: "p-2" }, b.name),
                       React.createElement("td", { className: "p-2" }, b.phone),
                       React.createElement("td", { className: "p-2" }, b.plan),
@@ -223,25 +235,8 @@
                   )
                 )
               ),
-          // Notification pop-up modal
           showNotifModal && React.createElement("div", { className: "fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50" },
             React.createElement("div", { className: "bg-white text-black rounded-xl p-8 shadow-lg text-center" },
               React.createElement("h2", { className: "text-xl font-bold mb-4" }, "New Booking Alert!"),
               React.createElement("p", { className: "mb-4" }, "You have new pending bookings. Please respond."),
               React.createElement("button", {
-                className: "bg-yellow-500 px-6 py-2 rounded font-bold",
-                onClick: () => setPlayNotif(false)
-              }, "Stop Sound")
-            )
-          )
-        )
-      );
-    }
-
-    ReactDOM.render(
-      React.createElement(AdminPanel),
-      document.getElementById('root')
-    );
-  </script>
-</body>
-</html>
