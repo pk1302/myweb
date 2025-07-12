@@ -207,12 +207,12 @@ const Pricing = ({ onSelectPlan }) => {
 
 
 // --- START OF components/UpiPaymentModal.tsx ---
-const UpiPaymentModal = ({ isOpen, onClose, amount, booking, bookings }) => {
+const UpiPaymentModal = ({ isOpen, onClose, amount, booking }) => {
     const isMobileDevice = () => /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     const UPI_ID = 'qr.possible@sib';
     const STUDIO_NAME = 'Possible Studio';
-    const QR_CODE_URL = '/upi-qr-code.png';
+    const QR_CODE_URL = './upi-qr-code.png'; // Use relative path
 
     const [isMobile, setIsMobile] = useState(false);
 
@@ -224,8 +224,10 @@ const UpiPaymentModal = ({ isOpen, onClose, amount, booking, bookings }) => {
         if (!isOpen || !booking) return;
 
         const interval = setInterval(() => {
-            const storedBookings = JSON.parse(localStorage.getItem('studioBookings') || '[]');
-            const currentBooking = storedBookings.find(b => b.id === booking.id);
+            const storedBookingsRaw = localStorage.getItem('studioBookings');
+            const allBookings = storedBookingsRaw ? JSON.parse(storedBookingsRaw) : [];
+            const currentBooking = allBookings.find(b => b.id === booking.id);
+
             if (currentBooking && currentBooking.status === 'confirmed') {
                 clearInterval(interval);
                 onClose();
@@ -256,7 +258,7 @@ const UpiPaymentModal = ({ isOpen, onClose, amount, booking, bookings }) => {
                 )
             ) : (
                 React.createElement("div", { className: "bg-white p-4 rounded-lg flex justify-center" },
-                    React.createElement("img", { src: QR_CODE_URL, alt: "UPI QR Code", className: "w-48 h-48" })
+                    React.createElement("img", { src: QR_CODE_URL, alt: "UPI QR Code", className: "w-48 h-48 object-contain" })
                 )
             ),
             React.createElement("div", { className: "mt-6 text-center bg-zinc-900/50 p-4 rounded-lg" },
