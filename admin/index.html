@@ -16,7 +16,8 @@
 </head>
 <body class="bg-zinc-900 text-white min-h-screen">
   <div id="root"></div>
-  <audio id="notif-sound" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa1c82.mp3" preload="auto"></audio>
+  <!-- Place notification.mp3 in the same folder as this file -->
+  <audio id="notif-sound" src="notification.mp3" preload="auto" loop></audio>
   <script>
     // --- Firebase Config (same as user site) ---
     const firebaseConfig = {
@@ -53,25 +54,40 @@
       const [loginError, setLoginError] = useState('');
       const [bookings, setBookings] = useState([]);
       const [adminMsg, setAdminMsg] = useState(null);
-      const prevBookingIds = React.useRef([]);
+      const prevPendingIds = React.useRef([]);
+      const [playNotif, setPlayNotif] = useState(false);
 
+      // Listen for bookings and trigger sound on new pending
       useEffect(() => {
         if (isAuthenticated) {
           return listenBookings((bks) => {
-            // Play sound if new booking arrives
-            const ids = bks.map(b => b.id);
-            if (prevBookingIds.current.length && ids.length > prevBookingIds.current.length) {
-              const newBookings = bks.filter(b => !prevBookingIds.current.includes(b.id));
-              if (newBookings.length > 0) {
-                const audio = document.getElementById("notif-sound");
-                if (audio) { audio.currentTime = 0; audio.play(); }
-              }
+            const pendingBookings = bks.filter(b => b.status === "pending");
+            const prevIds = prevPendingIds.current;
+            // If there is at least one pending, play sound
+            if (pendingBookings.length > 0) {
+              setPlayNotif(true);
+            } else {
+              setPlayNotif(false);
             }
-            prevBookingIds.current = ids;
+            // Update ref for next time
+            prevPendingIds.current = pendingBookings.map(b => b.id);
             setBookings(bks);
           });
         }
       }, [isAuthenticated]);
+
+      // Play/stop audio on playNotif state change
+      useEffect(() => {
+        const audio = document.getElementById("notif-sound");
+        if (!audio) return;
+        if (playNotif) {
+          audio.currentTime = 0;
+          audio.play();
+        } else {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      }, [playNotif]);
 
       function handleLogin(e) {
         e.preventDefault();
@@ -109,6 +125,9 @@
           )
         );
       }
+
+      // Pop-up modal for new booking notification
+      const showNotifModal = playNotif && bookings.some(b => b.status === "pending");
 
       return (
         React.createElement("div", { className: "container mx-auto px-4 sm:px-6 lg:px-8 py-8" },
@@ -176,7 +195,18 @@
                     )
                   )
                 )
-              )
+              ),
+          // Notification pop-up modal
+          showNotifModal && React.createElement("div", { className: "fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50" },
+            React.createElement("div", { className: "bg-white text-black rounded-xl p-8 shadow-lg text-center" },
+              React.createElement("h2", { className: "text-xl font-bold mb-4" }, "New Booking Alert!"),
+              React.createElement("p", { className: "mb-4" }, "You have new pending bookings. Please respond."),
+              React.createElement("button", {
+                className: "bg-yellow-500 px-6 py-2 rounded font-bold",
+                onClick: () => setPlayNotif(false)
+              }, "Stop Sound")
+            )
+          )
         )
       );
     }
