@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Possible Studio Admin Panel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+  <style>body { font-family: 'Inter', sans-serif; }</style>
+  <!-- Firebase compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <!-- React UMD -->
+  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+</head>
+<body class="bg-zinc-900 text-white min-h-screen">
+  <div id="root"></div>
+  <audio id="notif-sound" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa1c82.mp3" preload="auto"></audio>
+  <script>
+    // --- Firebase Config (same as user site) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyCzSeK0Mare4CtM4pFqwSAO_YmLcQEGJOo",
+      authDomain: "studio-booking-608cc.firebaseapp.com",
+      databaseURL: "https://studio-booking-608cc-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "studio-booking-608cc",
+      storageBucket: "studio-booking-608cc.appspot.com",
+      messagingSenderId: "464295194306",
+      appId: "1:464295194306:web:d8ec45509b0e4241a9955b",
+      measurementId: "G-LZEK0QJBMG"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const { useState, useEffect } = React;
+
+    function updateBooking(id, updates) {
+      return db.ref('bookings/' + id).update(updates);
+    }
+    function listenBookings(callback) {
+      const ref = db.ref('bookings');
+      ref.on('value', snapshot => {
+        const val = snapshot.val() || {};
+        const bookings = Object.entries(val).map(([id, data]) => ({ id, ...data }));
+        callback(bookings);
+      });
+      return () => ref.off();
+    }
+
+    function AdminPanel() {
+      const [password, setPassword] = useState('');
+      const [isAuthenticated, setIsAuthenticated] = useState(false);
+      const [loginError, setLoginError] = useState('');
+      const [bookings, setBookings] = useState([]);
+      const [adminMsg, setAdminMsg] = useState(null);
+      const prevBookingIds = React.useRef([]);
+
+      useEffect(() => {
+        if (isAuthenticated) {
+          return listenBookings((bks) => {
+            // Play sound if new booking arrives
+            const ids = bks.map(b => b.id);
+            if (prevBookingIds.current.length && ids.length > prevBookingIds.current.length) {
+              const newBookings = bks.filter(b => !prevBookingIds.current.includes(b.id));
+              if (newBookings.length > 0) {
+                const audio = document.getElementById("notif-sound");
+                if (audio) { audio.currentTime = 0; audio.play(); }
+              }
+            }
+            prevBookingIds.current = ids;
+            setBookings(bks);
+          });
+        }
+      }, [isAuthenticated]);
+
+      function handleLogin(e) {
+        e.preventDefault();
+        // Change password here!
+        if (password === 'admin123') {
+          setIsAuthenticated(true);
+          setLoginError('');
+        } else {
+          setLoginError('Incorrect password');
+        }
+      }
+
+      function handleStatus(id, status) {
+        updateBooking(id, { status }).then(() => {
+          setAdminMsg(`Booking ${status === "confirmed" ? "confirmed" : "cancelled"} successfully.`);
+          setTimeout(() => setAdminMsg(null), 3000);
+        });
+      }
+
+      if (!isAuthenticated) {
+        return (
+          React.createElement("div", { className: "max-w-sm mx-auto mt-24 bg-zinc-800 p-8 rounded-xl shadow-lg border border-zinc-700" },
+            React.createElement("h2", { className: "text-xl font-bold mb-4 text-yellow-400" }, "Admin Login"),
+            React.createElement("form", { onSubmit: handleLogin },
+              React.createElement("input", {
+                type: "password",
+                placeholder: "Admin password",
+                className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white",
+                value: password,
+                onChange: e => setPassword(e.target.value)
+              }),
+              loginError && React.createElement("div", { className: "text-red-400 mb-2" }, loginError),
+              React.createElement("button", { type: "submit", className: "w-full bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors" }, "Login")
+            )
+          )
+        );
+      }
+
+      return (
+        React.createElement("div", { className: "container mx-auto px-4 sm:px-6 lg:px-8 py-8" },
+          React.createElement("h2", { className: "text-2xl font-bold mb-6 text-white" }, "All Bookings"),
+          adminMsg && React.createElement("div", { className: "mb-4 p-4 bg-green-800 text-green-200 rounded" }, adminMsg),
+          bookings.length === 0
+            ? React.createElement("div", { className: "text-gray-400" }, "No bookings yet.")
+            : React.createElement("table", { className: "w-full text-sm bg-zinc-800 rounded-lg overflow-hidden" },
+                React.createElement("thead", null,
+                  React.createElement("tr", { className: "bg-zinc-700 text-yellow-400" },
+                    React.createElement("th", { className: "p-2" }, "Name"),
+                    React.createElement("th", { className: "p-2" }, "Phone"),
+                    React.createElement("th", { className: "p-2" }, "Plan"),
+                    React.createElement("th", { className: "p-2" }, "Date"),
+                    React.createElement("th", { className: "p-2" }, "Time"),
+                    React.createElement("th", { className: "p-2" }, "Amount"),
+                    React.createElement("th", { className: "p-2" }, "Paid"),
+                    React.createElement("th", { className: "p-2" }, "Status"),
+                    React.createElement("th", { className: "p-2" }, "Action")
+                  )
+                ),
+                React.createElement("tbody", null,
+                  bookings.slice().reverse().map(b =>
+                    React.createElement("tr", { key: b.id, className: b.status === "cancelled" ? "bg-red-900 text-red-200" : b.status === "pending" ? "bg-zinc-700" : "bg-zinc-800" },
+                      React.createElement("td", { className: "p-2" }, b.name),
+                      React.createElement("td", { className: "p-2" }, b.phone),
+                      React.createElement("td", { className: "p-2" }, b.plan),
+                      React.createElement("td", { className: "p-2" }, b.date),
+                      React.createElement("td", { className: "p-2" }, `${b.startTime} - ${b.endTime}`),
+                      React.createElement("td", { className: "p-2" }, `₹${b.amount}`),
+                      React.createElement("td", { className: "p-2" }, `₹${b.paid}`),
+                      React.createElement("td", { className: "p-2" },
+                        b.status === "confirmed"
+                          ? React.createElement("span", { className: "text-green-400" }, "Confirmed")
+                          : b.status === "pending"
+                            ? React.createElement("span", { className: "text-yellow-400" }, "Pending")
+                            : React.createElement("span", { className: "text-red-400" }, "Cancelled")
+                      ),
+                      React.createElement("td", { className: "p-2" },
+                        b.status === "pending" && React.createElement("div", null,
+                          React.createElement("button", {
+                            className: "bg-green-600 text-white px-2 py-1 rounded mr-2 hover:bg-green-700",
+                            onClick: () => handleStatus(b.id, "confirmed")
+                          }, "Confirm"),
+                          React.createElement("button", {
+                            className: "bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700",
+                            onClick: () => {
+                              if (window.confirm("Are you sure you want to cancel this booking?")) {
+                                handleStatus(b.id, "cancelled");
+                              }
+                            }
+                          }, "Cancel")
+                        ),
+                        b.status === "confirmed" && React.createElement("div", null,
+                          React.createElement("button", {
+                            className: "bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700",
+                            onClick: () => {
+                              if (window.confirm("Are you sure you want to cancel this booking?")) {
+                                handleStatus(b.id, "cancelled");
+                              }
+                            }
+                          }, "Cancel")
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+        )
+      );
+    }
+
+    ReactDOM.render(
+      React.createElement(AdminPanel),
+      document.getElementById('root')
+    );
+  </script>
+</body>
+</html>
