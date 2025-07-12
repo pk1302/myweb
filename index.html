@@ -9,7 +9,6 @@
     <style>
       body { font-family: 'Inter', sans-serif; }
     </style>
-    <!-- Use React 17 and React Router DOM 5 UMD builds -->
     <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/react-router-dom@5.3.4/umd/react-router-dom.min.js"></script>
@@ -18,7 +17,7 @@
     <div id="root"></div>
     <script>
 const { useState, useEffect, useMemo, useCallback } = React;
-const { BrowserRouter, Link } = ReactRouterDOM;
+const { BrowserRouter, Route, Switch, Link, useHistory, Redirect } = ReactRouterDOM;
 
 // --- Constants ---
 const PRICING_PLANS = [
@@ -229,6 +228,7 @@ function BookingForm({ plan, addBooking, bookings, getUnavailableHours, onCancel
     return parseInt(endTime.split(':')[0], 10) - parseInt(startTime.split(':')[0], 10);
   }, [startTime, endTime]);
   const totalAmount = plan.price * duration;
+  const paymentAmount = paymentOption === "full" ? totalAmount : Math.ceil(totalAmount / 2);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -261,6 +261,8 @@ function BookingForm({ plan, addBooking, bookings, getUnavailableHours, onCancel
       endTime,
       status: 'pending',
       amount: totalAmount,
+      paid: paymentOption === "full" ? totalAmount : paymentAmount,
+      paymentOption,
       createdAt: new Date().toISOString(),
     };
     setPendingBooking(booking);
@@ -302,11 +304,16 @@ function BookingForm({ plan, addBooking, bookings, getUnavailableHours, onCancel
           React.createElement("label", { className: "ml-2" },
             React.createElement("input", { type: "radio", value: "full", checked: paymentOption === "full", onChange: () => setPaymentOption('full') }),
             React.createElement("span", { className: "ml-1" }, "Full")
+          ),
+          React.createElement("label", { className: "ml-4" },
+            React.createElement("input", { type: "radio", value: "half", checked: paymentOption === "half", onChange: () => setPaymentOption('half') }),
+            React.createElement("span", { className: "ml-1" }, "50% Advance")
           )
         ),
         React.createElement("div", { className: "mb-4" },
           React.createElement("span", { className: "text-gray-300" }, "Total: "),
-          React.createElement("span", { className: "text-yellow-400 font-bold text-lg" }, `₹${totalAmount.toLocaleString('en-IN')}`)
+          React.createElement("span", { className: "text-yellow-400 font-bold text-lg" }, `₹${totalAmount.toLocaleString('en-IN')}`),
+          paymentOption === "half" && React.createElement("span", { className: "ml-2 text-green-400" }, `(Pay ₹${paymentAmount} now)`)
         ),
         formError && React.createElement("div", { className: "mb-4 text-red-400" }, formError),
         React.createElement("div", { className: "flex space-x-4" },
@@ -317,7 +324,7 @@ function BookingForm({ plan, addBooking, bookings, getUnavailableHours, onCancel
       showUpiModal && pendingBooking && React.createElement(UpiPaymentModal, {
         isOpen: showUpiModal,
         onClose: () => { setShowUpiModal(false); setPendingBooking(null); },
-        amount: totalAmount,
+        amount: paymentAmount,
         booking: pendingBooking,
         bookings
       })
@@ -379,6 +386,103 @@ function UpiPaymentModal({ isOpen, onClose, amount, booking }) {
   );
 }
 
+// --- Admin Panel ---
+function AdminPanel({ bookings, setBookings, isAuthenticated, setIsAuthenticated }) {
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const history = useHistory();
+
+  function handleLogin(e) {
+    e.preventDefault();
+    if (password === 'admin123') {
+      setIsAuthenticated(true);
+      setLoginError('');
+    } else {
+      setLoginError('Incorrect password');
+    }
+  }
+
+  function handleStatus(id, status) {
+    const updated = bookings.map(b => b.id === id ? { ...b, status } : b);
+    setBookings(updated);
+    localStorage.setItem('studioBookings', JSON.stringify(updated));
+  }
+
+  if (!isAuthenticated) {
+    return (
+      React.createElement("div", { className: "max-w-sm mx-auto mt-16 bg-zinc-800 p-8 rounded-xl shadow-lg border border-zinc-700" },
+        React.createElement("h2", { className: "text-xl font-bold mb-4" }, "Admin Login"),
+        React.createElement("form", { onSubmit: handleLogin },
+          React.createElement("input", {
+            type: "password",
+            placeholder: "Admin password",
+            className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white",
+            value: password,
+            onChange: e => setPassword(e.target.value)
+          }),
+          loginError && React.createElement("div", { className: "text-red-400 mb-2" }, loginError),
+          React.createElement("button", { type: "submit", className: "w-full bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors" }, "Login")
+        )
+      )
+    );
+  }
+
+  return (
+    React.createElement("div", { className: "container mx-auto px-4 sm:px-6 lg:px-8 py-8" },
+      React.createElement("h2", { className: "text-2xl font-bold mb-6 text-white" }, "All Bookings"),
+      bookings.length === 0
+        ? React.createElement("div", { className: "text-gray-400" }, "No bookings yet.")
+        : React.createElement("table", { className: "w-full text-sm bg-zinc-800 rounded-lg overflow-hidden" },
+            React.createElement("thead", null,
+              React.createElement("tr", { className: "bg-zinc-700 text-yellow-400" },
+                React.createElement("th", { className: "p-2" }, "Name"),
+                React.createElement("th", { className: "p-2" }, "Phone"),
+                React.createElement("th", { className: "p-2" }, "Plan"),
+                React.createElement("th", { className: "p-2" }, "Date"),
+                React.createElement("th", { className: "p-2" }, "Time"),
+                React.createElement("th", { className: "p-2" }, "Amount"),
+                React.createElement("th", { className: "p-2" }, "Paid"),
+                React.createElement("th", { className: "p-2" }, "Status"),
+                React.createElement("th", { className: "p-2" }, "Action")
+              )
+            ),
+            React.createElement("tbody", null,
+              bookings.slice().reverse().map(b =>
+                React.createElement("tr", { key: b.id, className: b.status === "cancelled" ? "bg-red-900 text-red-200" : b.status === "pending" ? "bg-zinc-700" : "bg-zinc-800" },
+                  React.createElement("td", { className: "p-2" }, b.name),
+                  React.createElement("td", { className: "p-2" }, b.phone),
+                  React.createElement("td", { className: "p-2" }, b.plan),
+                  React.createElement("td", { className: "p-2" }, b.date),
+                  React.createElement("td", { className: "p-2" }, `${b.startTime} - ${b.endTime}`),
+                  React.createElement("td", { className: "p-2" }, `₹${b.amount}`),
+                  React.createElement("td", { className: "p-2" }, `₹${b.paid}`),
+                  React.createElement("td", { className: "p-2" },
+                    b.status === "confirmed"
+                      ? React.createElement("span", { className: "text-green-400" }, "Confirmed")
+                      : b.status === "pending"
+                        ? React.createElement("span", { className: "text-yellow-400" }, "Pending")
+                        : React.createElement("span", { className: "text-red-400" }, "Cancelled")
+                  ),
+                  React.createElement("td", { className: "p-2" },
+                    b.status === "pending" && React.createElement("div", null,
+                      React.createElement("button", {
+                        className: "bg-green-600 text-white px-2 py-1 rounded mr-2 hover:bg-green-700",
+                        onClick: () => handleStatus(b.id, "confirmed")
+                      }, "Confirm"),
+                      React.createElement("button", {
+                        className: "bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700",
+                        onClick: () => handleStatus(b.id, "cancelled")
+                      }, "Cancel")
+                    )
+                  )
+                )
+              )
+            )
+          )
+    )
+  );
+}
+
 // --- Main App ---
 function App() {
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -410,19 +514,27 @@ function App() {
   const logout = () => setIsAuthenticated(false);
 
   return (
-    React.createElement("div", null,
+    React.createElement(BrowserRouter, null,
       React.createElement(Header, { isAuthenticated, logout }),
       React.createElement("main", null,
-        !selectedPlan ? (
-          React.createElement(Pricing, { onSelectPlan: setSelectedPlan })
-        ) : (
-          React.createElement(BookingForm, {
-            plan: selectedPlan,
-            addBooking,
-            bookings,
-            getUnavailableHours,
-            onCancel: () => setSelectedPlan(null)
-          })
+        React.createElement(Switch, null,
+          React.createElement(Route, { exact: true, path: "/" },
+            !selectedPlan ? (
+              React.createElement(Pricing, { onSelectPlan: setSelectedPlan })
+            ) : (
+              React.createElement(BookingForm, {
+                plan: selectedPlan,
+                addBooking,
+                bookings,
+                getUnavailableHours,
+                onCancel: () => setSelectedPlan(null)
+              })
+            )
+          ),
+          React.createElement(Route, { path: "/admin" },
+            React.createElement(AdminPanel, { bookings, setBookings, isAuthenticated, setIsAuthenticated })
+          ),
+          React.createElement(Route, { render: () => React.createElement(Redirect, { to: "/" }) })
         )
       ),
       React.createElement(Footer)
@@ -432,9 +544,7 @@ function App() {
 
 // --- Render ---
 ReactDOM.render(
-  React.createElement(BrowserRouter, null,
-    React.createElement(App)
-  ),
+  React.createElement(App),
   document.getElementById('root')
 );
     </script>
