@@ -395,7 +395,7 @@
     }
 
     // --- UPI Payment Modal: QR code and UPI deep link only ---
-    function UpiPaymentModal({ isOpen, onClose, amount, booking }) {
+function UpiPaymentModal({ isOpen, onClose, amount, booking }) {
   const UPI_ID = 'qr.possible@sib';
   const STUDIO_NAME = 'Possible Studio';
   const QR_CODE_URL = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' +
@@ -447,9 +447,10 @@
         React.createElement("div", { className: "bg-white p-4 rounded-lg flex justify-center mb-2" },
           React.createElement("img", { src: QR_CODE_URL, alt: "UPI QR Code", className: "w-48 h-48 object-contain" })
         ),
-        React.createElement("div", { className: "text-center text-gray-700 font-bold mb-2" },
+        // Brighter, more visible UPI ID
+        React.createElement("div", { className: "text-center text-yellow-400 font-extrabold text-lg mb-2 tracking-wide" },
           "UPI ID: ",
-          React.createElement("span", { className: "text-black" }, UPI_ID)
+          React.createElement("span", null, UPI_ID)
         ),
         React.createElement("div", { className: "mt-6 text-center bg-zinc-900/50 p-4 rounded-lg" },
           React.createElement("div", { className: "flex justify-center items-center space-x-2" },
