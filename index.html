@@ -7,8 +7,10 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <style>body { font-family: 'Inter', sans-serif; }</style>
+  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <!-- React UMD -->
   <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/react-router-dom@5.3.4/umd/react-router-dom.min.js"></script>
@@ -16,9 +18,8 @@
 <body class="bg-zinc-900 text-white">
   <div id="root"></div>
   <audio id="notif-sound" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa1c82.mp3" preload="auto"></audio>
-
   <script>
-    // Firebase Config
+    // --- Firebase Config ---
     const firebaseConfig = {
       apiKey: "AIzaSyCzSeK0Mare4CtM4pFqwSAO_YmLcQEGJOo",
       authDomain: "studio-booking-608cc.firebaseapp.com",
@@ -31,81 +32,443 @@
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-  </script>
 
-  <!-- Script block with React components -->
-  <script>
     const { useState, useEffect, useMemo, useCallback } = React;
-    const { HashRouter, Route, Switch, Link, useHistory, Redirect, useLocation } = ReactRouterDOM;
+    const { HashRouter, Link, useLocation } = ReactRouterDOM;
 
-    // Dummy Header Component
-    function Header() {
-      return React.createElement("header", {
-        className: "bg-zinc-800 p-4 text-center text-xl font-bold"
-      }, "Possible Studio Booking");
+    // --- Booking CRUD with Firebase ---
+    function createBooking(booking) {
+      return db.ref('bookings').push(booking);
+    }
+    function listenBookings(callback) {
+      const ref = db.ref('bookings');
+      ref.on('value', snapshot => {
+        const val = snapshot.val() || {};
+        const bookings = Object.entries(val).map(([id, data]) => ({ id, ...data }));
+        callback(bookings);
+      });
+      return () => ref.off();
     }
 
-    // Dummy Footer Component
-    function Footer() {
-      return React.createElement("footer", {
-        className: "bg-zinc-800 p-4 text-center text-sm text-gray-400"
-      }, "© 2025 Possible Studio. All rights reserved.");
-    }
-
-    // Dummy Pricing Component
+    // --- UI Data ---
     const PRICING_PLANS = [
       { id: 'basic', name: 'Basic Studio', price: 2000, description: 'Just the space. Bring your own gear and create freely.', features: ['Studio Space Access'] },
       { id: 'standard', name: 'Standard Package', price: 3500, description: 'A complete setup for most projects, cameraman included.', features: ['Studio Space Access', '2 Professional Cameras', 'Standard Lighting Kit', '2 Shure Microphones', 'Dedicated Cameraman'] },
       { id: 'premium', name: 'Premium Package', price: 4500, description: 'For complex shoots requiring multiple angles and full support.', features: ['Studio Space Access', '3 Professional Cameras', 'Advanced Lighting Kit', '2 Shure Microphones', 'Dedicated Cameraman'] },
     ];
+    const HOURLY_SLOTS = Array.from({ length: 14 }, (_, i) => {
+      const hour = i + 9;
+      return `${hour < 10 ? '0' : ''}${hour}:00`;
+    });
 
-    function Pricing({ onSelectPlan }) {
-      return React.createElement("div", { className: "p-8 max-w-4xl mx-auto" },
-        React.createElement("h2", { className: "text-3xl font-bold mb-6 text-center" }, "Choose a Plan"),
-        React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-6" },
-          PRICING_PLANS.map(plan =>
-            React.createElement("div", {
-              key: plan.id,
-              className: "bg-zinc-800 p-6 rounded-lg shadow-lg border border-zinc-700"
-            },
-              React.createElement("h3", { className: "text-xl font-bold mb-2" }, plan.name),
-              React.createElement("p", { className: "text-gray-400 mb-2" }, plan.description),
-              React.createElement("p", { className: "text-yellow-400 font-bold mb-4" }, `₹${plan.price}/hr`),
-              React.createElement("ul", { className: "text-sm text-gray-300 mb-4 list-disc list-inside" },
-                plan.features.map((f, i) => React.createElement("li", { key: i }, f))
+    // --- Icons ---
+    function CheckIcon() {
+      return (
+        React.createElement("svg", { className: "h-6 w-6 text-yellow-400", xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor" },
+          React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M5 13l4 4L19 7" })
+        )
+      );
+    }
+    function PhoneIcon() {
+      return (
+        React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6 text-yellow-400", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor" },
+          React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" })
+        )
+      );
+    }
+
+    // --- Header ---
+    function Header() {
+      const location = useLocation();
+      return (
+        React.createElement("header", { className: "bg-zinc-900/80 backdrop-blur-sm sticky top-0 z-40" },
+          React.createElement("div", { className: "container mx-auto px-4 sm:px-6 lg:px-8" },
+            React.createElement("div", { className: "flex items-center justify-between h-16" },
+              React.createElement(Link, { to: "/", className: "flex items-center", style: { cursor: "pointer" } },
+                React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-8 w-8 text-yellow-400", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor" },
+                  React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: 2, d: "M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" })
+                ),
+                React.createElement("span", { className: "ml-3 text-2xl font-bold text-white uppercase" }, "Possible Studio")
               ),
-              React.createElement("button", {
-                className: "w-full bg-yellow-500 text-zinc-900 font-bold py-2 px-4 rounded hover:bg-yellow-600 transition",
-                onClick: () => onSelectPlan(plan)
-              }, "Book Now")
+              React.createElement("div", { className: "flex items-center space-x-4" },
+                React.createElement(Link, {
+                  to: "/admin",
+                  className: "px-4 py-2 text-sm font-medium text-white bg-zinc-700 rounded-md hover:bg-yellow-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 transition-colors"
+                }, "Admin Panel")
+              )
             )
           )
         )
       );
     }
-  </script>
 
-  <!-- Booking logic and app -->
-  <script>
-    // Import your BookingForm and PaymentOptionsModal here.
-    // For brevity, you can paste your BookingForm + PaymentOptionsModal script
-    // directly here. You already have them written properly.
-
-    // For demonstration, just assume BookingForm is defined
-    function BookingForm({ plan, onCancel }) {
-      return React.createElement("div", {
-        className: "text-center p-8"
-      }, 
-        React.createElement("h2", { className: "text-2xl font-bold mb-4" }, `Booking form for: ${plan.name}`),
-        React.createElement("button", {
-          className: "mt-4 px-4 py-2 bg-zinc-700 rounded hover:bg-zinc-600",
-          onClick: onCancel
-        }, "Go Back")
+    // --- Footer ---
+    function Footer() {
+      return (
+        React.createElement("footer", { className: "bg-zinc-800 border-t border-zinc-700 mt-16" },
+          React.createElement("div", { className: "container mx-auto px-4 sm:px-6 lg:px-8 py-8" },
+            React.createElement("div", { className: "text-center text-gray-400" },
+              React.createElement("p", null, `© ${new Date().getFullYear()} Possible Studio. All Rights Reserved.`),
+              React.createElement("p", { className: "mt-2 text-sm" }, "Built for creative professionals."),
+              React.createElement("div", { className: "mt-4 flex justify-center space-x-6" },
+                React.createElement("a", { href: "#", className: "hover:text-yellow-400 transition-colors" }, "Instagram"),
+                React.createElement("a", { href: "#", className: "hover:text-yellow-400 transition-colors" }, "Facebook"),
+                React.createElement("a", { href: "#", className: "hover:text-yellow-400 transition-colors" }, "Twitter")
+              )
+            )
+          )
+        )
       );
     }
 
+    // --- Pricing ---
+    function PricingCard({ plan, onSelect }) {
+      return (
+        React.createElement("div", { className: `flex flex-col h-full bg-zinc-800 rounded-2xl shadow-xl border border-zinc-700 p-8 transform transition-transform duration-300 hover:-translate-y-2 ${plan.id === 'standard' ? 'border-yellow-500 ring-2 ring-yellow-500' : ''}` },
+          React.createElement("h3", { className: "text-2xl font-bold text-white" }, plan.name),
+          React.createElement("p", { className: "mt-4 text-gray-400 flex-grow" }, plan.description),
+          React.createElement("div", { className: "mt-6" },
+            React.createElement("span", { className: "text-5xl font-extrabold text-white" }, `₹${plan.price.toLocaleString('en-IN')}`),
+            React.createElement("span", { className: "text-lg font-medium text-gray-400" }, "/hour")
+          ),
+          React.createElement("ul", { className: "mt-8 space-y-4" },
+            plan.features.map((feature, index) =>
+              React.createElement("li", { key: index, className: "flex items-start" },
+                React.createElement("div", { className: "flex-shrink-0" }, React.createElement(CheckIcon)),
+                React.createElement("p", { className: "ml-3 text-base text-gray-300" }, feature)
+              )
+            )
+          ),
+          React.createElement("div", { className: "mt-auto pt-8" },
+            React.createElement("button", {
+              onClick: onSelect,
+              className: "w-full bg-yellow-500 text-slate-900 font-bold py-3 px-6 rounded-lg hover:bg-yellow-600 transition-colors"
+            }, "Select Plan")
+          )
+        )
+      );
+    }
+
+    function Pricing({ onSelectPlan }) {
+      return (
+        React.createElement("section", { id: "pricing-section", className: "py-20 sm:py-28 bg-zinc-900" },
+          React.createElement("div", { className: "container mx-auto px-4 sm:px-6 lg:px-8" },
+            React.createElement("div", { className: "text-center mb-16" },
+              React.createElement("h2", { className: "text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-white" }, "Flexible Pricing for Every Creator"),
+              React.createElement("p", { className: "mt-4 max-w-3xl mx-auto text-lg text-gray-400" },
+                "Choose a standard package or call us to build a custom one. All prices are inclusive of taxes."
+              )
+            ),
+            React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-stretch" },
+              PRICING_PLANS.map((plan) =>
+                React.createElement(PricingCard, { key: plan.id, plan, onSelect: () => onSelectPlan(plan) })
+              ),
+              React.createElement("div", { className: "flex flex-col h-full bg-zinc-800 rounded-2xl shadow-xl border border-dashed border-zinc-600 p-8 transform transition-transform duration-300 hover:-translate-y-2" },
+                React.createElement("h3", { className: "text-2xl font-bold text-white" }, "Custom Package"),
+                React.createElement("p", { className: "mt-4 text-gray-400 flex-grow" }, "Need something different? Let's build a package that fits your exact needs."),
+                React.createElement("div", { className: "mt-6" },
+                  React.createElement("span", { className: "text-4xl font-extrabold text-white" }, "Tailored Pricing"),
+                  React.createElement("p", { className: "text-lg font-medium text-gray-400" }, "Call for a quote")
+                ),
+                React.createElement("ul", { className: "mt-8 space-y-4" },
+                  React.createElement("li", { className: "flex items-start" },
+                    React.createElement("div", { className: "flex-shrink-0" }, React.createElement(PhoneIcon)),
+                    React.createElement("p", { className: "ml-3 text-base text-gray-300" }, "Custom equipment list")
+                  ),
+                  React.createElement("li", { className: "flex items-start" },
+                    React.createElement("div", { className: "flex-shrink-0" }, React.createElement(PhoneIcon)),
+                    React.createElement("p", { className: "ml-3 text-base text-gray-300" }, "Multi-day or long-term rental")
+                  ),
+                  React.createElement("li", { className: "flex items-start" },
+                    React.createElement("div", { className: "flex-shrink-0" }, React.createElement(PhoneIcon)),
+                    React.createElement("p", { className: "ml-3 text-base text-gray-300" }, "Specialist crew members")
+                  )
+                ),
+                React.createElement("div", { className: "mt-auto pt-8" },
+                  React.createElement("a", {
+                    href: "tel:+919994858927",
+                    className: "w-full block text-center bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors"
+                  }, "Call to Book")
+                )
+              )
+            )
+          )
+        )
+      );
+    }
+
+    // --- Payment Modal ---
+    function PaymentOptionsModal({ open, onClose, amount }) {
+      const [tab, setTab] = useState("upi");
+      const upiId = "possiblestudio@okaxis";
+      const upiName = "Possible Studio";
+      const upiQr = "/your-upi-qr.png";
+      const bankDetails = {
+        accountName: "Possible Studio",
+        accountNo: "0385073000001310",
+        ifsc: "SIBL0000385",
+        bankName: "South Indian Bank"
+      };
+      if (!open) return null;
+      return (
+        React.createElement("div", { className: "fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70" },
+          React.createElement("div", { className: "bg-zinc-900 rounded-xl shadow-xl p-8 w-full max-w-md relative" },
+            React.createElement("button", {
+              className: "absolute top-3 right-3 text-gray-400 hover:text-white text-2xl",
+              onClick: onClose
+            }, "×"),
+            React.createElement("h2", { className: "text-2xl font-bold mb-6 text-center" }, "Choose Payment Method"),
+            React.createElement("div", { className: "flex justify-center mb-6" },
+              React.createElement("button", {
+                className: `px-4 py-2 rounded-l-lg font-bold ${tab === "upi" ? "bg-yellow-500 text-zinc-900" : "bg-zinc-800 text-gray-300"}`,
+                onClick: () => setTab("upi")
+              }, "UPI App"),
+              React.createElement("button", {
+                className: `px-4 py-2 rounded-r-lg font-bold ${tab === "bank" ? "bg-yellow-500 text-zinc-900" : "bg-zinc-800 text-gray-300"}`,
+                onClick: () => setTab("bank")
+              }, "Bank Details"),
+            ),
+            tab === "upi" && (
+              React.createElement("div", { className: "flex flex-col items-center" },
+                React.createElement("img", {
+                  src: upiQr,
+                  alt: "UPI QR Code",
+                  className: "w-40 h-40 mb-4 rounded-lg border border-zinc-700 bg-white"
+                }),
+                React.createElement("p", { className: "mb-2 text-lg" }, `Pay to: ${upiName}`),
+                React.createElement("p", { className: "mb-2 text-sm text-gray-400" }, `UPI ID: ${upiId}`),
+                React.createElement("a", {
+                  href: `upi://pay?pa=${upiId}&pn=${encodeURIComponent(upiName)}&am=${amount}&cu=INR`,
+                  className: "mt-2 inline-block px-4 py-2 bg-yellow-500 text-black rounded-lg font-bold hover:bg-yellow-600 transition",
+                  target: "_blank"
+                }, "Pay with UPI App"),
+                React.createElement("p", { className: "mt-4 text-xs text-gray-400" }, "After payment, please share the screenshot or UTR for confirmation.")
+              )
+            ),
+            tab === "bank" && (
+              React.createElement("div", { className: "text-left" },
+                React.createElement("table", { className: "w-full mb-4" },
+                  React.createElement("tbody", null,
+                    React.createElement("tr", null,
+                      React.createElement("td", { className: "pr-4 py-1 text-gray-400" }, "Account Name:"),
+                      React.createElement("td", { className: "py-1" }, bankDetails.accountName)
+                    ),
+                    React.createElement("tr", null,
+                      React.createElement("td", { className: "pr-4 py-1 text-gray-400" }, "Account No.:"),
+                      React.createElement("td", { className: "py-1" }, bankDetails.accountNo)
+                    ),
+                    React.createElement("tr", null,
+                      React.createElement("td", { className: "pr-4 py-1 text-gray-400" }, "IFSC Code:"),
+                      React.createElement("td", { className: "py-1" }, bankDetails.ifsc)
+                    ),
+                    React.createElement("tr", null,
+                      React.createElement("td", { className: "pr-4 py-1 text-gray-400" }, "Bank Name:"),
+                      React.createElement("td", { className: "py-1" }, bankDetails.bankName)
+                    )
+                  )
+                ),
+                React.createElement("p", { className: "text-xs text-gray-400" }, "After transfer, please share the payment screenshot or UTR for confirmation.")
+              )
+            )
+          )
+        )
+      );
+    }
+
+    // --- Booking Form ---
+    function BookingForm({ plan, onCancel }) {
+      const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+      const [startTime, setStartTime] = useState('');
+      const [endTime, setEndTime] = useState('');
+      const [paymentOption, setPaymentOption] = useState('full');
+      const [name, setName] = useState('');
+      const [phone, setPhone] = useState('');
+      const [formError, setFormError] = useState('');
+      const [showPaymentModal, setShowPaymentModal] = useState(false);
+      const [pendingBooking, setPendingBooking] = useState(null);
+      const [bookings, setBookings] = useState([]);
+      const [confirmedBooking, setConfirmedBooking] = useState(null);
+
+      useEffect(() => listenBookings(setBookings), []);
+      useEffect(() => { setStartTime(''); setEndTime(''); }, [date]);
+      useEffect(() => { setEndTime(''); }, [startTime]);
+      useEffect(() => {
+        if (pendingBooking) {
+          const updatedBooking = bookings.find(b => b.id === pendingBooking.id);
+          if (updatedBooking && updatedBooking.status === 'confirmed') {
+            setShowPaymentModal(false);
+            setConfirmedBooking(updatedBooking);
+            setPendingBooking(null);
+          }
+        }
+      }, [bookings, pendingBooking]);
+
+      const getUnavailableHours = useCallback((date) => {
+        const dayBookings = bookings.filter(b => b.date === date && b.status === 'confirmed');
+        let hours = [];
+        dayBookings.forEach(b => {
+          const start = parseInt(b.startTime.split(':')[0], 10);
+          const end = parseInt(b.endTime.split(':')[0], 10);
+          for (let h = start; h < end; h++) hours.push(h);
+        });
+        return hours;
+      }, [bookings]);
+      const unavailableHours = useMemo(() => getUnavailableHours(date), [date, getUnavailableHours]);
+      const startTimes = useMemo(() => HOURLY_SLOTS.slice(0, -1).map(time => ({ value: time, disabled: unavailableHours.includes(parseInt(time.split(':')[0], 10)) })), [unavailableHours]);
+      const endTimes = useMemo(() => {
+        if (!startTime) return [];
+        const startHour = parseInt(startTime.split(':')[0], 10);
+        let nextUnavailableHour = 23;
+        for (const hour of unavailableHours.sort((a,b) => a - b)) { if (hour > startHour) { nextUnavailableHour = hour; break; } }
+        return HOURLY_SLOTS.map(time => parseInt(time.split(':')[0], 10)).filter(hour => hour > startHour && hour <= nextUnavailableHour).map(hour => ({ value: `${hour < 10 ? '0' : ''}${hour}:00` }));
+      }, [startTime, unavailableHours]);
+      const duration = useMemo(() => {
+        if (!startTime || !endTime) return 0;
+        return parseInt(endTime.split(':')[0], 10) - parseInt(startTime.split(':')[0], 10);
+      }, [startTime, endTime]);
+      const totalAmount = plan.price * duration;
+      const paymentAmount = paymentOption === "full" ? totalAmount : Math.ceil(totalAmount / 2);
+
+      function isValidPhone(num) {
+        return /^[6-9]\d{9}$/.test(num);
+      }
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        setFormError('');
+        if (!name || !phone || !date || !startTime || !endTime) {
+          setFormError('Please fill all fields.');
+          return;
+        }
+        if (!isValidPhone(phone)) {
+          setFormError('Please enter a valid 10-digit Indian mobile number.');
+          return;
+        }
+        if (duration <= 0) {
+          setFormError('Please select a valid time slot.');
+          return;
+        }
+        // Save booking as pending
+        createBooking({
+          name,
+          phone,
+          plan: plan.name,
+          date,
+          startTime,
+          endTime,
+          status: 'pending',
+          paymentOption,
+          amount: paymentAmount,
+          createdAt: Date.now()
+        }).then(ref => {
+          setPendingBooking({ id: ref.key });
+          setShowPaymentModal(true);
+        });
+      };
+
+      if (confirmedBooking) {
+        return (
+          React.createElement("div", { className: "bg-green-800 rounded-lg p-8 text-center" },
+            React.createElement("h2", { className: "text-2xl font-bold mb-4" }, "Booking Confirmed!"),
+            React.createElement("p", { className: "mb-2" }, "Thank you for booking with Possible Studio."),
+            React.createElement("p", null, "We look forward to seeing you!"),
+            React.createElement("button", {
+              className: "mt-6 bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded-lg hover:bg-yellow-600 transition",
+              onClick: () => window.location.reload()
+            }, "Book Another Slot")
+          )
+        );
+      }
+
+      return (
+        React.createElement("form", { onSubmit: handleSubmit, className: "bg-zinc-800 rounded-xl shadow-xl p-8 max-w-lg mx-auto" },
+          React.createElement("h2", { className: "text-2xl font-bold mb-6" }, `Book: ${plan.name}`),
+          formError && React.createElement("div", { className: "mb-4 text-red-400" }, formError),
+          React.createElement("div", { className: "mb-4" },
+            React.createElement("label", { className: "block mb-1 font-medium" }, "Your Name"),
+            React.createElement("input", {
+              type: "text", value: name, onChange: e => setName(e.target.value),
+              className: "w-full px-4 py-2 rounded-lg bg-zinc-700 text-white focus:outline-none"
+            })
+          ),
+          React.createElement("div", { className: "mb-4" },
+            React.createElement("label", { className: "block mb-1 font-medium" }, "Mobile Number"),
+            React.createElement("input", {
+              type: "tel", value: phone, onChange: e => setPhone(e.target.value),
+              placeholder: "10-digit Indian number",
+              className: "w-full px-4 py-2 rounded-lg bg-zinc-700 text-white focus:outline-none"
+            })
+          ),
+          React.createElement("div", { className: "mb-4 flex gap-4" },
+            React.createElement("div", { className: "flex-1" },
+              React.createElement("label", { className: "block mb-1 font-medium" }, "Date"),
+              React.createElement("input", {
+                type: "date", value: date, onChange: e => setDate(e.target.value),
+                className: "w-full px-4 py-2 rounded-lg bg-zinc-700 text-white focus:outline-none"
+              })
+            ),
+            React.createElement("div", { className: "flex-1" },
+              React.createElement("label", { className: "block mb-1 font-medium" }, "Start Time"),
+              React.createElement("select", {
+                value: startTime, onChange: e => setStartTime(e.target.value),
+                className: "w-full px-4 py-2 rounded-lg bg-zinc-700 text-white focus:outline-none"
+              },
+                React.createElement("option", { value: "" }, "Select"),
+                startTimes.map(opt =>
+                  React.createElement("option", { key: opt.value, value: opt.value, disabled: opt.disabled }, opt.value)
+                )
+              )
+            ),
+            React.createElement("div", { className: "flex-1" },
+              React.createElement("label", { className: "block mb-1 font-medium" }, "End Time"),
+              React.createElement("select", {
+                value: endTime, onChange: e => setEndTime(e.target.value),
+                className: "w-full px-4 py-2 rounded-lg bg-zinc-700 text-white focus:outline-none"
+              },
+                React.createElement("option", { value: "" }, "Select"),
+                endTimes.map(opt =>
+                  React.createElement("option", { key: opt.value, value: opt.value }, opt.value)
+                )
+              )
+            )
+          ),
+          React.createElement("div", { className: "mb-4" },
+            React.createElement("label", { className: "block mb-1 font-medium" }, "Payment Option"),
+            React.createElement("select", {
+              value: paymentOption, onChange: e => setPaymentOption(e.target.value),
+              className: "w-full px-4 py-2 rounded-lg bg-zinc-700 text-white focus:outline-none"
+            },
+              React.createElement("option", { value: "full" }, "Full Payment"),
+              React.createElement("option", { value: "advance" }, "50% Advance")
+            )
+          ),
+          duration > 0 && React.createElement("div", { className: "mb-4 text-lg font-semibold" },
+            `Total: ₹${totalAmount} — Pay Now: ₹${paymentAmount}`
+          ),
+          React.createElement("div", { className: "flex gap-4 mt-6" },
+            React.createElement("button", {
+              type: "submit",
+              className: "flex-1 bg-yellow-500 text-zinc-900 font-bold py-3 px-6 rounded-lg hover:bg-yellow-600 transition"
+            }, "Proceed to Payment"),
+            React.createElement("button", {
+              type: "button",
+              className: "flex-1 bg-zinc-700 text-white font-bold py-3 px-6 rounded-lg hover:bg-zinc-600 transition",
+              onClick: onCancel
+            }, "Cancel")
+          ),
+          React.createElement(PaymentOptionsModal, {
+            open: showPaymentModal,
+            onClose: () => setShowPaymentModal(false),
+            amount: paymentAmount
+          })
+        )
+      );
+    }
+
+    // --- App Root ---
     function App() {
       const [selectedPlan, setSelectedPlan] = useState(null);
+
       return (
         React.createElement(HashRouter, null,
           React.createElement("div", null,
