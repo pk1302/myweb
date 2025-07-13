@@ -34,10 +34,21 @@
 
     const { useState, useEffect, useRef } = React;
 
+    /**
+     * Updates a booking record in Firebase.
+     * @param {string} id - The ID of the booking to update.
+     * @param {object} updates - An object containing the fields to update.
+     * @returns {Promise<void>} A promise that resolves when the update is complete.
+     */
     function updateBooking(id, updates) {
       return db.ref('bookings/' + id).update(updates);
     }
 
+    /**
+     * Listens for real-time changes to all bookings in Firebase.
+     * @param {function} callback - A function to call with the updated list of bookings.
+     * @returns {function} A cleanup function to detach the listener.
+     */
     function listenBookings(callback) {
       const ref = db.ref('bookings');
       ref.on('value', snapshot => {
@@ -46,6 +57,35 @@
         callback(bookings);
       });
       return () => ref.off();
+    }
+
+    /**
+     * ConfirmationModal component for displaying a confirmation dialog.
+     * @param {object} props - Component props.
+     * @param {boolean} props.isOpen - Whether the modal is open.
+     * @param {string} props.message - The message to display in the modal.
+     * @param {function} props.onConfirm - Callback function when "Confirm" is clicked.
+     * @param {function} props.onCancel - Callback function when "Cancel" is clicked.
+     */
+    function ConfirmationModal({ isOpen, message, onConfirm, onCancel }) {
+      if (!isOpen) return null;
+      return (
+        React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
+          React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-sm relative text-center" },
+            React.createElement("p", { className: "text-lg text-white mb-6" }, message),
+            React.createElement("div", { className: "flex justify-center space-x-4" },
+              React.createElement("button", {
+                onClick: onConfirm,
+                className: "bg-red-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-700 transition-colors"
+              }, "Yes, Cancel"),
+              React.createElement("button", {
+                onClick: onCancel,
+                className: "bg-zinc-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-zinc-700 transition-colors"
+              }, "No, Keep")
+            )
+          )
+        )
+      );
     }
 
     function AdminPanel() {
@@ -58,15 +98,22 @@
       const [playNotif, setPlayNotif] = useState(false);
       const [audioUnlocked, setAudioUnlocked] = useState(false);
 
-      // Handle bookings and trigger notification
+      // State for the custom cancellation confirmation modal
+      const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+      const [bookingToCancelId, setBookingToCancelId] = useState(null);
+
+      // Effect to handle bookings and trigger notification sound
       useEffect(() => {
         if (isAuthenticated && audioUnlocked) {
           return listenBookings((bks) => {
             const pendingBookings = bks.filter(b => b.status === "pending");
             const prevIds = prevPendingIds.current;
-            if (pendingBookings.length > 0) {
+            // Check if there are new pending bookings that weren't there before
+            const newPendingBookings = pendingBookings.filter(b => !prevIds.includes(b.id));
+
+            if (newPendingBookings.length > 0) {
               setPlayNotif(true);
-            } else {
+            } else if (pendingBookings.length === 0) {
               setPlayNotif(false);
             }
             prevPendingIds.current = pendingBookings.map(b => b.id);
@@ -75,26 +122,32 @@
         }
       }, [isAuthenticated, audioUnlocked]);
 
-      // Play or stop sound based on state
+      // Effect to play or stop the notification sound
       useEffect(() => {
         const audio = document.getElementById("notif-sound");
-        if (!audio || !audioUnlocked) return;
+        if (!audio || !audioUnlocked) return; // Ensure audio element exists and is unlocked
+
         if (playNotif) {
-          audio.muted = false;
-          audio.volume = 1.0;
-          audio.currentTime = 0;
+          audio.muted = false; // Ensure not muted
+          audio.volume = 1.0; // Set full volume
+          audio.currentTime = 0; // Start from beginning
           audio.play().catch(err => {
-            // ignore
+            // Autoplay policy might block, catch the error silently
+            console.warn("Audio autoplay blocked:", err);
           });
         } else {
           audio.pause();
-          audio.currentTime = 0;
+          audio.currentTime = 0; // Reset audio to start
         }
       }, [playNotif, audioUnlocked]);
 
+      /**
+       * Handles admin login.
+       * @param {Event} e - The form submission event.
+       */
       function handleLogin(e) {
         e.preventDefault();
-        if (password === 'admin123') {
+        if (password === 'admin123') { // Hardcoded password for demonstration
           setIsAuthenticated(true);
           setLoginError('');
         } else {
@@ -102,13 +155,42 @@
         }
       }
 
+      /**
+       * Updates the status of a booking.
+       * @param {string} id - The ID of the booking.
+       * @param {string} status - The new status ('confirmed' or 'cancelled').
+       */
       function handleStatus(id, status) {
         updateBooking(id, { status }).then(() => {
           setAdminMsg(`Booking ${status === "confirmed" ? "confirmed" : "cancelled"} successfully.`);
+          setTimeout(() => setAdminMsg(null), 3000); // Clear message after 3 seconds
+        }).catch(error => {
+          console.error("Error updating booking status:", error);
+          setAdminMsg(`Failed to update booking status: ${error.message}`);
           setTimeout(() => setAdminMsg(null), 3000);
         });
       }
 
+      /**
+       * Handles confirmation of booking cancellation from the modal.
+       */
+      function handleConfirmCancel() {
+        if (bookingToCancelId) {
+          handleStatus(bookingToCancelId, "cancelled");
+          setBookingToCancelId(null); // Clear the ID
+        }
+        setShowCancelConfirm(false); // Close the modal
+      }
+
+      /**
+       * Handles cancellation of the confirmation modal.
+       */
+      function handleCancelCancel() {
+        setBookingToCancelId(null); // Clear the ID
+        setShowCancelConfirm(false); // Close the modal
+      }
+
+      // Render login screen if not authenticated
       if (!isAuthenticated) {
         return (
           React.createElement("div", { className: "max-w-sm mx-auto mt-24 bg-zinc-800 p-8 rounded-xl shadow-lg border border-zinc-700" },
@@ -117,124 +199,140 @@
               React.createElement("input", {
                 type: "password",
                 placeholder: "Admin password",
-                className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white",
+                className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg",
                 value: password,
                 onChange: e => setPassword(e.target.value)
               }),
-              loginError && React.createElement("div", { className: "text-red-400 mb-2" }, loginError),
-              React.createElement("button", { type: "submit", className: "w-full bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors" }, "Login")
+              loginError && React.createElement("div", { className: "text-red-400 mb-2 text-sm" }, loginError),
+              React.createElement("button", { type: "submit", className: "w-full bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded-lg hover:bg-yellow-600 transition-colors" }, "Login")
             )
           )
         );
       }
 
+      // Render audio unlock screen if audio is not unlocked
       if (!audioUnlocked) {
         return (
           React.createElement("div", { className: "flex flex-col items-center justify-center min-h-screen bg-zinc-900 text-white" },
             React.createElement("button", {
-              className: "bg-yellow-500 px-6 py-3 rounded font-bold text-black text-xl",
+              className: "bg-yellow-500 px-6 py-3 rounded-lg font-bold text-black text-xl hover:bg-yellow-600 transition-colors shadow-lg",
               onClick: () => {
                 const audio = document.getElementById("notif-sound");
                 if (audio) {
-                  audio.muted = false;
-                  audio.volume = 1.0;
+                  audio.muted = false; // Ensure not muted
+                  audio.volume = 1.0; // Set full volume
                   audio.play().then(() => {
-                    audio.pause();
+                    audio.pause(); // Pause immediately after playing to unlock
                     setAudioUnlocked(true);
-                  }).catch(() => {
+                  }).catch((e) => {
+                    // If play fails (e.g., no user interaction), still unlock to proceed
+                    console.warn("Audio play failed, proceeding with audio unlocked:", e);
                     setAudioUnlocked(true);
                   });
                 } else {
-                  setAudioUnlocked(true);
+                  setAudioUnlocked(true); // If audio element not found, proceed
                 }
               }
             }, "Start Notifications"),
-            React.createElement("p", { className: "mt-4 text-gray-400" }, "Click to enable sound notifications for new bookings.")
+            React.createElement("p", { className: "mt-4 text-gray-400 text-center" }, "Click to enable sound notifications for new bookings.")
           )
         );
       }
 
+      // Determine if the notification modal should be shown
       const showNotifModal = playNotif && bookings.some(b => b.status === "pending");
 
+      // Main Admin Panel UI
       return (
         React.createElement("div", { className: "container mx-auto px-4 py-8" },
-          React.createElement("h2", { className: "text-2xl font-bold mb-6 text-white" }, "All Bookings"),
-          adminMsg && React.createElement("div", { className: "mb-4 p-4 bg-green-800 text-green-200 rounded" }, adminMsg),
+          React.createElement("h2", { className: "text-3xl font-bold mb-6 text-white text-center" }, "Admin Panel: Studio Bookings"),
+          adminMsg && React.createElement("div", { className: "mb-4 p-4 bg-green-800 text-green-200 rounded-lg text-center" }, adminMsg),
+
           bookings.length === 0
-            ? React.createElement("div", { className: "text-gray-400" }, "No bookings yet.")
-            : React.createElement("table", { className: "w-full text-sm bg-zinc-800 rounded-lg overflow-hidden" },
-                React.createElement("thead", null,
-                  React.createElement("tr", { className: "bg-zinc-700 text-yellow-400" },
-                    ["Name", "Phone", "Plan", "Date", "Time", "Amount", "Paid", "Status", "Action"].map(col =>
-                      React.createElement("th", { className: "p-2", key: col }, col)
+            ? React.createElement("div", { className: "text-gray-400 text-center py-10 text-lg" }, "No bookings yet.")
+            : React.createElement("div", { className: "overflow-x-auto rounded-lg shadow-xl border border-zinc-700" },
+                React.createElement("table", { className: "min-w-full text-sm bg-zinc-800" },
+                  React.createElement("thead", null,
+                    React.createElement("tr", { className: "bg-zinc-700 text-yellow-400 text-left" },
+                      ["Name", "Phone", "Plan", "Date", "Time", "Amount", "Paid", "Status", "Action"].map(col =>
+                        React.createElement("th", { className: "p-4 font-semibold", key: col }, col)
+                      )
                     )
-                  )
-                ),
-                React.createElement("tbody", null,
-                  bookings.slice().reverse().map(b =>
-                    React.createElement("tr", {
-                      key: b.id,
-                      className:
-                        b.status === "cancelled"
-                          ? "bg-red-900 text-red-200"
-                          : b.status === "pending"
-                          ? "bg-zinc-700"
-                          : "bg-zinc-800"
-                    },
-                      React.createElement("td", { className: "p-2" }, b.name),
-                      React.createElement("td", { className: "p-2" }, b.phone),
-                      React.createElement("td", { className: "p-2" }, b.plan),
-                      React.createElement("td", { className: "p-2" }, b.date),
-                      React.createElement("td", { className: "p-2" }, `${b.startTime} - ${b.endTime}`),
-                      React.createElement("td", { className: "p-2" }, `₹${b.amount}`),
-                      React.createElement("td", { className: "p-2" }, `₹${b.paid}`),
-                      React.createElement("td", { className: "p-2" },
-                        b.status === "confirmed"
-                          ? React.createElement("span", { className: "text-green-400" }, "Confirmed")
-                          : b.status === "pending"
-                            ? React.createElement("span", { className: "text-yellow-400" }, "Pending")
-                            : React.createElement("span", { className: "text-red-400" }, "Cancelled")
-                      ),
-                      React.createElement("td", { className: "p-2" },
-                        b.status === "pending" && React.createElement("div", null,
-                          React.createElement("button", {
-                            className: "bg-green-600 text-white px-2 py-1 rounded mr-2 hover:bg-green-700",
-                            onClick: () => handleStatus(b.id, "confirmed")
-                          }, "Confirm"),
-                          React.createElement("button", {
-                            className: "bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700",
-                            onClick: () => {
-                              if (window.confirm("Are you sure you want to cancel this booking?")) {
-                                handleStatus(b.id, "cancelled");
-                              }
-                            }
-                          }, "Cancel")
+                  ),
+                  React.createElement("tbody", null,
+                    bookings.slice().reverse().map(b =>
+                      React.createElement("tr", {
+                        key: b.id,
+                        className:
+                          b.status === "cancelled"
+                            ? "bg-red-900 text-red-200"
+                            : b.status === "pending"
+                              ? "bg-zinc-700 text-yellow-100" // Highlight pending bookings
+                              : "bg-zinc-800 text-gray-300"
+                      },
+                        React.createElement("td", { className: "p-4" }, b.name),
+                        React.createElement("td", { className: "p-4" }, b.phone),
+                        React.createElement("td", { className: "p-4" }, b.plan),
+                        React.createElement("td", { className: "p-4" }, b.date),
+                        React.createElement("td", { className: "p-4" }, `${b.startTime} - ${b.endTime}`),
+                        React.createElement("td", { className: "p-4" }, `₹${b.amount.toLocaleString('en-IN')}`),
+                        React.createElement("td", { className: "p-4" }, `₹${b.paid.toLocaleString('en-IN')}`),
+                        React.createElement("td", { className: "p-4 font-medium" },
+                          b.status === "confirmed"
+                            ? React.createElement("span", { className: "text-green-400" }, "Confirmed")
+                            : b.status === "pending"
+                              ? React.createElement("span", { className: "text-yellow-400" }, "Pending")
+                              : React.createElement("span", { className: "text-red-400" }, "Cancelled")
                         ),
-                        b.status === "confirmed" && React.createElement("div", null,
-                          React.createElement("button", {
-                            className: "bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700",
-                            onClick: () => {
-                              if (window.confirm("Are you sure you want to cancel this booking?")) {
-                                handleStatus(b.id, "cancelled");
+                        React.createElement("td", { className: "p-4" },
+                          b.status === "pending" && React.createElement("div", { className: "flex space-x-2" },
+                            React.createElement("button", {
+                              className: "bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition-colors shadow",
+                              onClick: () => handleStatus(b.id, "confirmed")
+                            }, "Approve"),
+                            React.createElement("button", {
+                              className: "bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition-colors shadow",
+                              onClick: () => {
+                                setBookingToCancelId(b.id);
+                                setShowCancelConfirm(true);
                               }
-                            }
-                          }, "Cancel")
+                            }, "Cancel")
+                          ),
+                          b.status === "confirmed" && React.createElement("div", null,
+                            React.createElement("button", {
+                              className: "bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition-colors shadow",
+                              onClick: () => {
+                                setBookingToCancelId(b.id);
+                                setShowCancelConfirm(true);
+                              }
+                            }, "Cancel")
+                          )
                         )
                       )
                     )
                   )
                 )
               ),
+
+          // Notification Modal for new pending bookings
           showNotifModal && React.createElement("div", { className: "fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50" },
-            React.createElement("div", { className: "bg-white text-black rounded-xl p-8 shadow-lg text-center" },
-              React.createElement("h2", { className: "text-xl font-bold mb-4" }, "New Booking Alert!"),
-              React.createElement("p", { className: "mb-4" }, "You have new pending bookings. Please respond."),
+            React.createElement("div", { className: "bg-zinc-800 text-white rounded-xl p-8 shadow-lg text-center border border-yellow-500 animate-pulse" },
+              React.createElement("h2", { className: "text-2xl font-bold mb-4 text-yellow-400" }, "New Booking Alert!"),
+              React.createElement("p", { className: "mb-6 text-lg" }, "You have new pending bookings. Please review and respond."),
               React.createElement("button", {
-                className: "bg-yellow-500 px-6 py-2 rounded font-bold",
-                onClick: () => setPlayNotif(false)
-              }, "Stop Sound")
+                className: "bg-yellow-500 text-zinc-900 px-6 py-2 rounded-lg font-bold hover:bg-yellow-600 transition-colors shadow",
+                onClick: () => setPlayNotif(false) // Stop sound and close modal
+              }, "Stop Sound & Dismiss")
             )
-          )
+          ),
+
+          // Custom Confirmation Modal for cancellation
+          React.createElement(ConfirmationModal, {
+            isOpen: showCancelConfirm,
+            message: "Are you sure you want to cancel this booking?",
+            onConfirm: handleConfirmCancel,
+            onCancel: handleCancelCancel
+          })
         )
       );
     }
