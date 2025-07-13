@@ -340,7 +340,7 @@
               React.createElement("button", {
                 className: "bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors",
                 onClick: () => { 
-                  onCancel();
+                  onCancel(); // Only call onCancel to reset the page, do NOT call setBookingAwaitingAction(null)
                 }
               }, "OK")
             )
