@@ -475,5 +475,25 @@
       document.getElementById('root')
     );
   </script>
+  <!-- Booking Cancellation Popup Modal -->
+<div id="cancelModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); z-index:1000;">
+  <div style="background:#fff; max-width:400px; margin:10% auto; padding:30px 20px; border-radius:8px; text-align:center; box-shadow:0 2px 10px rgba(0,0,0,0.2);">
+    <h2>Booking Cancelled</h2>
+    <p>Your booking has been cancelled.</p>
+    <p>For more details, please call: <a href="tel:9994858927">9994858927</a>.</p>
+    <p>If you have already made a payment, your refund will be processed within 24 hours.</p>
+    <button onclick="document.getElementById('cancelModal').style.display='none'" style="margin-top:15px; padding:8px 20px; border:none; background:#007bff; color:#fff; border-radius:4px; cursor:pointer;">Close</button>
+  </div>
+</div>
+
+<script>
+  // Call this function when booking is cancelled
+  function showCancellationPopup() {
+    document.getElementById('cancelModal').style.display = 'block';
+  }
+
+  // Example: Uncomment the line below to show the popup automatically for testing
+  // showCancellationPopup();
+</script>
 </body>
 </html>
