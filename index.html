@@ -437,10 +437,18 @@
         return React.createElement(UpiPaymentModal, {
           isOpen: showPaymentModal,
           onClose: () => {
+            // When UPI modal closes, we don't immediately clear bookingAwaitingAction
+            // The useEffect will handle the transition to final confirmation if status is 'paid'
+            // Or it will keep the cancellation message if status is 'cancelled'
             setShowPaymentModal(false);
-            setBookingAwaitingAction(null); // Clear state after modal closes
-            setShowFinalConfirmation(false); // Ensure final confirmation is hidden
-            onCancel(); // Go back to plan selection
+            // Only if it's cancelled, we want to reset and go back to plans immediately
+            if (bookingAwaitingAction.status === 'cancelled') {
+                setBookingAwaitingAction(null);
+                setShowFinalConfirmation(false);
+                onCancel();
+            }
+            // If it's confirmed (awaiting payment) and user closes, we keep bookingAwaitingAction
+            // so the useEffect can still listen for 'paid' status.
           },
           amount: paymentAmount, // This amount is calculated based on the initial form data
           booking: bookingAwaitingAction // Pass the booking details for ID and status check
