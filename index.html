@@ -33,7 +33,7 @@
     const db = firebase.database();
 
     const { useState, useEffect, useMemo, useCallback } = React;
-    const { HashRouter, Route, Switch, Link, Redirect, useLocation } = ReactRouterDOM;
+    const { HashRouter, Route, Switch, Link, Redirect } = ReactRouterDOM;
 
     // --- Booking CRUD with Firebase ---
     function createBooking(booking) {
@@ -60,7 +60,6 @@
       return `${hour < 10 ? '0' : ''}${hour}:00`;
     });
 
-    // --- Header (no admin button) ---
     function Header() {
       return (
         React.createElement("header", { className: "bg-zinc-900/80 backdrop-blur-sm sticky top-0 z-40" },
@@ -132,81 +131,7 @@
       );
     }
 
-    function PricingCard({ plan, onSelect }) {
-      return (
-        React.createElement("div", { className: `flex flex-col h-full bg-zinc-800 rounded-2xl shadow-xl border border-zinc-700 p-8 transform transition-transform duration-300 hover:-translate-y-2 ${plan.id === 'standard' ? 'border-yellow-500 ring-2 ring-yellow-500' : ''}` },
-          React.createElement("h3", { className: "text-2xl font-bold text-white" }, plan.name),
-          React.createElement("p", { className: "mt-4 text-gray-400 flex-grow" }, plan.description),
-          React.createElement("div", { className: "mt-6" },
-            React.createElement("span", { className: "text-5xl font-extrabold text-white" }, `₹${plan.price.toLocaleString('en-IN')}`),
-            React.createElement("span", { className: "text-lg font-medium text-gray-400" }, "/hour")
-          ),
-          React.createElement("ul", { className: "mt-8 space-y-4" },
-            plan.features.map((feature, index) =>
-              React.createElement("li", { key: index, className: "flex items-start" },
-                React.createElement("div", { className: "flex-shrink-0" }, React.createElement(CheckIcon)),
-                React.createElement("p", { className: "ml-3 text-base text-gray-300" }, feature)
-              )
-            )
-          ),
-          React.createElement("div", { className: "mt-auto pt-8" },
-            React.createElement("button", {
-              onClick: onSelect,
-              className: "w-full bg-yellow-500 text-slate-900 font-bold py-3 px-6 rounded-lg hover:bg-yellow-600 transition-colors"
-            }, "Select Plan")
-          )
-        )
-      );
-    }
-
-    function Pricing({ onSelectPlan }) {
-      return (
-        React.createElement("section", { id: "pricing-section", className: "py-20 sm:py-28 bg-zinc-900" },
-          React.createElement("div", { className: "container mx-auto px-4 sm:px-6 lg:px-8" },
-            React.createElement("div", { className: "text-center mb-16" },
-              React.createElement("h2", { className: "text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-white" }, "Flexible Pricing for Every Creator"),
-              React.createElement("p", { className: "mt-4 max-w-3xl mx-auto text-lg text-gray-400" },
-                "Choose a standard package or call us to build a custom one. All prices are inclusive of taxes."
-              )
-            ),
-            React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-stretch" },
-              PRICING_PLANS.map((plan) =>
-                React.createElement(PricingCard, { key: plan.id, plan, onSelect: () => onSelectPlan(plan) })
-              ),
-              React.createElement("div", { className: "flex flex-col h-full bg-zinc-800 rounded-2xl shadow-xl border border-dashed border-zinc-600 p-8 transform transition-transform duration-300 hover:-translate-y-2" },
-                React.createElement("h3", { className: "text-2xl font-bold text-white" }, "Custom Package"),
-                React.createElement("p", { className: "mt-4 text-gray-400 flex-grow" }, "Need something different? Let's build a package that fits your exact needs."),
-                React.createElement("div", { className: "mt-6" },
-                  React.createElement("span", { className: "text-4xl font-extrabold text-white" }, "Tailored Pricing"),
-                  React.createElement("p", { className: "text-lg font-medium text-gray-400" }, "Call for a quote")
-                ),
-                React.createElement("ul", { className: "mt-8 space-y-4" },
-                  React.createElement("li", { className: "flex items-start" },
-                    React.createElement("div", { className: "flex-shrink-0" }, React.createElement(PhoneIcon)),
-                    React.createElement("p", { className: "ml-3 text-base text-gray-300" }, "Custom equipment list")
-                  ),
-                  React.createElement("li", { className: "flex items-start" },
-                    React.createElement("div", { className: "flex-shrink-0" }, React.createElement(PhoneIcon)),
-                    React.createElement("p", { className: "ml-3 text-base text-gray-300" }, "Multi-day or long-term rental")
-                  ),
-                  React.createElement("li", { className: "flex items-start" },
-                    React.createElement("div", { className: "flex-shrink-0" }, React.createElement(PhoneIcon)),
-                    React.createElement("p", { className: "ml-3 text-base text-gray-300" }, "Specialist crew members")
-                  )
-                ),
-                React.createElement("div", { className: "mt-auto pt-8" },
-                  React.createElement("a", {
-                    href: "tel:+919994858927",
-                    className: "w-full block text-center bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors"
-                  }, "Call to Book")
-                )
-              )
-            )
-          )
-        )
-      );
-    }
-
+    // --- BookingForm with cancellation detection ---
     function BookingForm({ plan, onCancel }) {
       const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
       const [startTime, setStartTime] = useState('');
@@ -238,24 +163,14 @@
             setConfirmedBooking(updatedBooking);
             setPendingBooking(null);
           }
+          // --- Show cancellation modal if admin cancels ---
+          if (updatedBooking && updatedBooking.status === 'cancelled') {
+            setShowUpiModal(false);
+            setShowCancelModal(true);
+            setPendingBooking(null);
+          }
         }
       }, [bookings, pendingBooking]);
-
-      // --- NEW: Listen for cancellation ---
-      useEffect(() => {
-        // Find if this user's booking is cancelled
-        const userBooking = bookings.find(
-          b =>
-            b.phone === phone &&
-            b.plan === plan.name &&
-            b.date === date &&
-            b.startTime === startTime &&
-            (b.status === 'pending' || b.status === 'confirmed' || b.status === 'cancelled')
-        );
-        if (userBooking && userBooking.status === 'cancelled') {
-          setShowCancelModal(true);
-        }
-      }, [bookings, phone, plan.name, date, startTime]);
 
       if (showCancelModal) {
         return React.createElement(CancellationModal, { onClose: () => setShowCancelModal(false) });
@@ -354,6 +269,22 @@
         );
       }
 
+      // Show waiting for confirmation if booking is pending
+      if (pendingBooking && !showUpiModal) {
+        const updatedBooking = bookings.find(b => b.id === pendingBooking.id);
+        if (updatedBooking && updatedBooking.status === 'pending') {
+          return (
+            React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
+              React.createElement("h2", { className: "text-2xl font-bold mb-4 text-yellow-400" }, "Waiting for admin confirmation..."),
+              React.createElement("div", { className: "mb-2" }, React.createElement("b", null, updatedBooking.plan)),
+              React.createElement("div", null, "Date: ", React.createElement("b", null, updatedBooking.date)),
+              React.createElement("div", null, "Time: ", React.createElement("b", null, `${updatedBooking.startTime} - ${updatedBooking.endTime}`)),
+              React.createElement("div", null, "Booking ID: ", React.createElement("b", null, updatedBooking.id))
+            )
+          );
+        }
+      }
+
       return (
         React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700" },
           React.createElement("h2", { className: "text-2xl font-bold mb-6 text-white" }, `Book ${plan.name}`),
@@ -364,7 +295,7 @@
             React.createElement("input", {
               className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white",
               value: phone,
-              onChange: e => setPhone(e.target.value.replace(/\D/g, '').slice(0,10)), // Only digits, max 10
+              onChange: e => setPhone(e.target.value.replace(/\D/g, '').slice(0,10)),
               maxLength: 10,
               pattern: "[6-9][0-9]{9}",
               inputMode: "numeric",
