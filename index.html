@@ -46,6 +46,16 @@
     }
 
     /**
+     * Updates a booking record in Firebase.
+     * @param {string} id - The ID of the booking to update.
+     * @param {object} updates - An object containing the fields to update.
+     * @returns {Promise<void>} A promise that resolves when the update is complete.
+     */
+    function updateBooking(id, updates) {
+      return db.ref('bookings/' + id).update(updates);
+    }
+
+    /**
      * Listens for real-time changes to all bookings in Firebase.
      * @param {function} callback - A function to call with the updated list of bookings.
      * @returns {function} A cleanup function to detach the listener.
@@ -251,10 +261,10 @@
       const [formError, setFormError] = useState('');
       const [bookings, setBookings] = useState([]); // All bookings for availability check
 
-      // New states for the approval flow
-      const [bookingAwaitingApproval, setBookingAwaitingApproval] = useState(null); // Stores booking details while pending admin approval
+      // States for the approval/payment flow
+      const [bookingAwaitingAction, setBookingAwaitingAction] = useState(null); // Stores booking details while pending admin approval or payment
       const [showPaymentModal, setShowPaymentModal] = useState(false); // Controls visibility of UPI modal
-      const [confirmedBooking, setConfirmedBooking] = useState(null); // Stores confirmed booking details for final message
+      const [showFinalConfirmation, setShowFinalConfirmation] = useState(false); // Controls visibility of final confirmation message
 
       // Listen to all bookings for availability checks
       useEffect(() => {
@@ -265,31 +275,37 @@
       useEffect(() => { setStartTime(''); setEndTime(''); }, [date]);
       useEffect(() => { setEndTime(''); }, [startTime]);
 
-      // Listen to the specific booking's status if it's awaiting approval
+      // Listen to the specific booking's status if it's awaiting action
       useEffect(() => {
-        if (bookingAwaitingApproval && bookingAwaitingApproval.id) {
-          const unsubscribe = listenToBooking(bookingAwaitingApproval.id, (updatedBooking) => {
+        if (bookingAwaitingAction && bookingAwaitingAction.id) {
+          const unsubscribe = listenToBooking(bookingAwaitingAction.id, (updatedBooking) => {
             if (updatedBooking) {
               if (updatedBooking.status === 'confirmed') {
-                setConfirmedBooking(updatedBooking); // Set for final confirmation message
-                setShowPaymentModal(true); // Show UPI modal
-                setBookingAwaitingApproval(null); // Clear awaiting approval state
+                // Admin approved, show payment option
+                setBookingAwaitingAction(updatedBooking); // Update with latest confirmed data
+                setShowPaymentModal(true);
+                setShowFinalConfirmation(false); // Ensure final confirmation is hidden
+              } else if (updatedBooking.status === 'paid') {
+                // Admin marked as paid, show final confirmation
+                setBookingAwaitingAction(updatedBooking); // Update with latest paid data
+                setShowPaymentModal(false); // Hide payment modal
+                setShowFinalConfirmation(true); // Show final confirmation
               } else if (updatedBooking.status === 'cancelled') {
                 // If cancelled, show the UPI modal, which will then display the cancellation message
-                // The UpiPaymentModal already handles rendering the cancellation message based on status
-                setShowPaymentModal(true);
-                setBookingAwaitingApproval(null); // Clear awaiting approval state
+                setBookingAwaitingAction(updatedBooking); // Update with latest cancelled data
+                setShowPaymentModal(true); // UPI modal handles cancellation message
+                setShowFinalConfirmation(false);
               }
             } else {
-              // Booking might have been deleted by admin before confirmation/cancellation
-              // Treat as cancelled for user's perspective
-              setShowPaymentModal(true); // Use UPI modal to show cancellation
-              setBookingAwaitingApproval(null);
+              // Booking might have been deleted by admin, treat as cancelled
+              setBookingAwaitingAction({ ...bookingAwaitingAction, status: 'cancelled' });
+              setShowPaymentModal(true); // UPI modal handles cancellation message
+              setShowFinalConfirmation(false);
             }
           });
           return () => unsubscribe(); // Cleanup listener on unmount or dependency change
         }
-      }, [bookingAwaitingApproval]); // Only re-run when bookingAwaitingApproval changes
+      }, [bookingAwaitingAction ? bookingAwaitingAction.id : null]); // Only re-run when bookingAwaitingAction.id changes
 
       const getUnavailableHours = useCallback((date) => {
         const dayBookings = bookings.filter(b => b.date === date && b.status === 'confirmed'); // Only confirmed bookings block slots
@@ -325,7 +341,7 @@
         if (!startTime || !endTime) return 0;
         return parseInt(endTime.split(':')[0], 10) - parseInt(startTime.split(':')[0], 10);
       }, [startTime, endTime]);
-      const totalAmount = plan.price * duration;
+      const totalAmount = isNaN(plan.price * duration) ? 0 : plan.price * duration;
       const paymentAmount = paymentOption === "full" ? totalAmount : Math.ceil(totalAmount / 2);
 
       /**
@@ -381,55 +397,58 @@
           createdAt: new Date().toISOString(),
         };
         createBooking(booking).then(ref => {
-          setBookingAwaitingApproval({ ...booking, id: ref.key }); // Store for listening
+          setBookingAwaitingAction({ ...booking, id: ref.key }); // Store for listening
         }).catch(error => {
           console.error("Error creating booking:", error);
           setFormError("Failed to create booking. Please try again.");
         });
       };
 
-      // Render confirmation message after payment
-      if (confirmedBooking && confirmedBooking.status === 'confirmed') {
+      // Render final confirmation message if booking is marked as paid
+      if (showFinalConfirmation && bookingAwaitingAction && bookingAwaitingAction.status === 'paid') {
         return (
           React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
             React.createElement("h2", { className: "text-2xl font-bold mb-4 text-green-400" }, "Your booking is confirmed!"),
-            React.createElement("div", { className: "mb-2" }, React.createElement("b", null, confirmedBooking.plan)),
-            React.createElement("div", null, "Date: ", React.createElement("b", null, confirmedBooking.date)),
-            React.createElement("div", null, "Time: ", React.createElement("b", null, `${confirmedBooking.startTime} - ${confirmedBooking.endTime}`)),
-            React.createElement("div", null, "Booking ID: ", React.createElement("b", null, confirmedBooking.id)),
+            React.createElement("div", { className: "mb-2" }, React.createElement("b", null, bookingAwaitingAction.plan)),
+            React.createElement("div", null, "Date: ", React.createElement("b", null, bookingAwaitingAction.date)),
+            React.createElement("div", null, "Time: ", React.createElement("b", null, `${bookingAwaitingAction.startTime} - ${bookingAwaitingAction.endTime}`)),
+            React.createElement("div", null, "Booking ID: ", React.createElement("b", null, bookingAwaitingAction.id)),
+            React.createElement("p", { className: "mt-4 text-gray-300" }, "Thank you for your payment."),
             React.createElement("div", { className: "mt-4" },
               React.createElement("button", {
                 className: "bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors",
-                onClick: () => { setConfirmedBooking(null); onCancel(); } // Reset and go back to plan selection
+                onClick: () => { 
+                  setBookingAwaitingAction(null); 
+                  setShowFinalConfirmation(false);
+                  onCancel(); // Reset and go back to plan selection
+                }
               }, "OK")
             )
           )
         );
       }
 
-      // Render UPI payment modal if payment is due (after admin approval)
-      if (showPaymentModal) {
-        // Pass the booking that was just confirmed/cancelled to the UPI modal
-        const bookingToPass = confirmedBooking || bookingAwaitingApproval;
+      // Render UPI payment modal if payment is due (after admin approval or if cancelled)
+      if (showPaymentModal && bookingAwaitingAction) {
         return React.createElement(UpiPaymentModal, {
           isOpen: showPaymentModal,
           onClose: () => {
             setShowPaymentModal(false);
-            setBookingAwaitingApproval(null); // Clear state after modal closes
-            setConfirmedBooking(null); // Clear confirmed state
+            setBookingAwaitingAction(null); // Clear state after modal closes
+            setShowFinalConfirmation(false); // Ensure final confirmation is hidden
             onCancel(); // Go back to plan selection
           },
           amount: paymentAmount, // This amount is calculated based on the initial form data
-          booking: bookingToPass // Pass the booking details for ID and status check
+          booking: bookingAwaitingAction // Pass the booking details for ID and status check
         });
       }
 
       // Render message while waiting for admin approval
-      if (bookingAwaitingApproval) {
+      if (bookingAwaitingAction && bookingAwaitingAction.status === 'pending') {
         return (
           React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
             React.createElement("h2", { className: "text-2xl font-bold mb-4 text-yellow-400" }, "Booking Submitted!"),
-            React.createElement("p", { className: "text-lg text-gray-300 mb-4" }, "Your booking request (ID: ", React.createElement("b", null, bookingAwaitingApproval.id), ") has been submitted and is awaiting admin approval."),
+            React.createElement("p", { className: "text-lg text-gray-300 mb-4" }, "Your booking request (ID: ", React.createElement("b", null, bookingAwaitingAction.id), ") has been submitted and is awaiting admin approval."),
             React.createElement("p", { className: "text-md text-gray-400 mb-6" }, "You will be automatically redirected to the payment page once your booking is approved, or notified if it's cancelled."),
             React.createElement("div", { className: "flex justify-center items-center space-x-2" },
                 React.createElement("div", { className: "animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-400" }),
@@ -438,7 +457,7 @@
             React.createElement("button", {
               className: "mt-8 bg-zinc-600 text-white font-bold py-2 px-6 rounded hover:bg-zinc-700 transition-colors",
               onClick: () => {
-                setBookingAwaitingApproval(null); // Allow user to go back to main page
+                setBookingAwaitingAction(null); // Allow user to go back to main page
                 onCancel();
               }
             }, "Go Back to Plans")
@@ -517,9 +536,11 @@
       const UPI_ID = 'qr.possible@sib';
       const STUDIO_NAME = 'Possible Studio';
       const CONTACT_NUMBER = '9994858927';
+      // Defensive check: Ensure amount is a number before using it in QR code data
+      const safeAmountForQR = typeof amount === 'number' ? amount.toFixed(2) : '0.00';
       const QR_CODE_URL = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' +
         encodeURIComponent(
-          `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${amount}&cu=INR&tn=Booking%20ID%20${booking.id || ''}`
+          `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${safeAmountForQR}&cu=INR&tn=Booking%20ID%20${booking.id || ''}`
         );
       const [isMobile, setIsMobile] = React.useState(false);
       const [isIOS, setIsIOS] = React.useState(false);
@@ -536,8 +557,10 @@
           const unsubscribe = listenToBooking(booking.id, (updatedBooking) => {
             if (updatedBooking) {
               setCurrentBookingStatus(updatedBooking.status);
-              // If confirmed, the BookingForm will handle closing this modal
-              // If cancelled, this modal will display the cancellation message
+              // If status becomes 'paid', close this modal and let BookingForm show final confirmation
+              if (updatedBooking.status === 'paid') {
+                onClose(); 
+              }
             } else {
               // Booking removed from database (e.g., deleted by admin), treat as cancelled
               setCurrentBookingStatus('cancelled');
@@ -545,12 +568,14 @@
           });
           return () => unsubscribe();
         }
-      }, [isOpen, booking]); // Re-run if modal opens or booking changes
+      }, [isOpen, booking, onClose]); // Re-run if modal opens, booking changes, or onClose changes
 
       if (!isOpen || !booking) return null;
 
       const handleMobilePay = () => {
-        const upiUrl = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${amount.toFixed(2)}&cu=INR&tn=Booking%20ID%20${booking.id}`;
+        // Defensive check: Ensure amount is a number before using it in UPI deep link
+        const safeAmountForLink = typeof amount === 'number' ? amount.toFixed(2) : '0.00';
+        const upiUrl = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${safeAmountForLink}&cu=INR&tn=Booking%20ID%20${booking.id}`;
         window.location.href = upiUrl;
       };
 
@@ -571,6 +596,9 @@
           )
         );
       }
+
+      // Defensive check: Ensure amount is a number for display
+      const displayAmount = typeof amount === 'number' ? amount.toLocaleString('en-IN') : 'N/A';
 
       // Render payment details if booking status is confirmed (or initially pending before this change)
       return (
@@ -597,7 +625,7 @@
                 React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-8 w-8", viewBox: "0 0 24 24", fill: "currentColor" },
                   React.createElement("path", { d: "M16.5 13.5h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zm-9-4h9c.83 0 1.5-.67 1.5-1.5S17.33 6.5 16.5 6.5h-9C6.67 6.5 6 7.17 6 8s.67 1.5 1.5 1.5zm9 8h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zM22 2H2v20h20V2zm-2 18H4V4h16v16z" })
                 ),
-                React.createElement("span", null, `Pay ₹${amount.toLocaleString('en-IN')} with UPI`)
+                React.createElement("span", null, `Pay ₹${displayAmount} with UPI`)
               )
             ),
             React.createElement("div", { className: "bg-white p-4 rounded-lg flex justify-center mb-2" },
