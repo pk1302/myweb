@@ -276,28 +276,31 @@
       useEffect(() => { setEndTime(''); }, [startTime]);
 
       // Listen to the specific booking's status if it's awaiting action
-      useEffect(() => {
-        if (bookingAwaitingAction && bookingAwaitingAction.id) {
-          const unsubscribe = listenToBooking(bookingAwaitingAction.id, (updatedBooking) => {
-            if (updatedBooking) {
-              // Always update bookingAwaitingAction to reflect the latest state from Firebase
-              setBookingAwaitingAction(updatedBooking);
+useEffect(() => {
+  if (bookingAwaitingAction && bookingAwaitingAction.id) {
+    const unsubscribe = listenToBooking(bookingAwaitingAction.id, (updatedBooking) => {
+      if (updatedBooking) {
+        setBookingAwaitingAction(updatedBooking);
 
-              // Control modal visibility based on status
-              if (updatedBooking.status === 'confirmed' || updatedBooking.status === 'cancelled') {
-                setShowPaymentModal(true); // Show UPI modal for payment or cancellation message
-              } else {
-                setShowPaymentModal(false); // Hide UPI modal for pending or paid
-              }
-            } else {
-              // Booking removed from database (e.g., deleted by admin), treat as cancelled
-              setBookingAwaitingAction(prev => ({ ...prev, status: 'cancelled' })); // Mark as cancelled locally
-              setShowPaymentModal(true); // Show UPI modal to display cancellation message
-            }
-          });
-          return () => unsubscribe(); // Cleanup listener on unmount or dependency change
+        // Update modal visibility based on status
+        if (updatedBooking.status === 'confirmed') {
+          setShowPaymentModal(true); // Show payment modal
+        } else if (updatedBooking.status === 'cancelled') {
+          setShowPaymentModal(true); // Show cancelled message
+        } else {
+          setShowPaymentModal(false); // Hide modal for pending/paid
         }
-      }, [bookingAwaitingAction ? bookingAwaitingAction.id : null]); // Only re-run when bookingAwaitingAction.id changes
+
+      } else {
+        // Booking deleted from Firebase → treat as cancelled
+        setBookingAwaitingAction(prev => ({ ...prev, status: 'cancelled' }));
+        setShowPaymentModal(true);
+      }
+    });
+    return () => unsubscribe(); // Cleanup
+  }
+}, [bookingAwaitingAction ? bookingAwaitingAction.id : null]);
+ // Only re-run when bookingAwaitingAction.id changes
 
       const getUnavailableHours = useCallback((date) => {
         // Now, pending, confirmed, and paid bookings will block slots
