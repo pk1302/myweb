@@ -7,8 +7,10 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <style>body { font-family: 'Inter', sans-serif; }</style>
+  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <!-- React UMD -->
   <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/react-router-dom@5.3.4/umd/react-router-dom.min.js"></script>
@@ -34,9 +36,20 @@
     const { HashRouter, Route, Switch, Link, Redirect, useLocation } = ReactRouterDOM;
 
     // --- Booking CRUD with Firebase ---
+    /**
+     * Creates a new booking record in Firebase.
+     * @param {object} booking - The booking object to save.
+     * @returns {firebase.database.ThenableReference} A promise-like object for the new booking reference.
+     */
     function createBooking(booking) {
       return db.ref('bookings').push(booking);
     }
+
+    /**
+     * Listens for real-time changes to all bookings in Firebase.
+     * @param {function} callback - A function to call with the updated list of bookings.
+     * @returns {function} A cleanup function to detach the listener.
+     */
     function listenBookings(callback) {
       const ref = db.ref('bookings');
       ref.on('value', snapshot => {
@@ -46,7 +59,13 @@
       });
       return () => ref.off();
     }
-    // Listen to a specific booking's changes
+
+    /**
+     * Listens for real-time changes to a specific booking in Firebase.
+     * @param {string} bookingId - The ID of the booking to listen to.
+     * @param {function} callback - A function to call with the updated booking data.
+     * @returns {function} A cleanup function to detach the listener.
+     */
     function listenToBooking(bookingId, callback) {
       const ref = db.ref(`bookings/${bookingId}`);
       ref.on('value', snapshot => {
@@ -56,7 +75,6 @@
       return () => ref.off();
     }
 
-
     // --- UI Data ---
     const PRICING_PLANS = [
       { id: 'basic', name: 'Basic Studio', price: 2000, description: 'Just the space. Bring your own gear and create freely.', features: ['Studio Space Access'] },
@@ -64,11 +82,13 @@
       { id: 'premium', name: 'Premium Package', price: 4500, description: 'For complex shoots requiring multiple angles and full support.', features: ['Studio Space Access', '3 Professional Cameras', 'Advanced Lighting Kit', '2 Shure Microphones', 'Dedicated Cameraman'] },
     ];
     const HOURLY_SLOTS = Array.from({ length: 14 }, (_, i) => {
-      const hour = i + 9;
+      const hour = i + 9; // Studio hours 9 AM to 10 PM
       return `${hour < 10 ? '0' : ''}${hour}:00`;
     });
 
-    // --- Header (no admin button) ---
+    /**
+     * Header component for the application.
+     */
     function Header() {
       return (
         React.createElement("header", { className: "bg-zinc-900/80 backdrop-blur-sm sticky top-0 z-40" },
@@ -86,6 +106,9 @@
       );
     }
 
+    /**
+     * Footer component for the application.
+     */
     function Footer() {
       return (
         React.createElement("footer", { className: "bg-zinc-800 border-t border-zinc-700 mt-16" },
@@ -104,6 +127,9 @@
       );
     }
 
+    /**
+     * CheckIcon SVG component.
+     */
     function CheckIcon() {
       return (
         React.createElement("svg", { className: "h-6 w-6 text-yellow-400", xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor" },
@@ -112,6 +138,9 @@
       );
     }
 
+    /**
+     * PhoneIcon SVG component.
+     */
     function PhoneIcon() {
       return (
         React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-6 w-6 text-yellow-400", fill: "none", viewBox: "0 0 24 24", stroke: "currentColor" },
@@ -120,6 +149,12 @@
       );
     }
 
+    /**
+     * PricingCard component to display individual pricing plans.
+     * @param {object} props - Component props.
+     * @param {object} props.plan - The pricing plan object.
+     * @param {function} props.onSelect - Callback function when the plan is selected.
+     */
     function PricingCard({ plan, onSelect }) {
       return (
         React.createElement("div", { className: `flex flex-col h-full bg-zinc-800 rounded-2xl shadow-xl border border-zinc-700 p-8 transform transition-transform duration-300 hover:-translate-y-2 ${plan.id === 'standard' ? 'border-yellow-500 ring-2 ring-yellow-500' : ''}` },
@@ -147,6 +182,11 @@
       );
     }
 
+    /**
+     * Pricing section component.
+     * @param {object} props - Component props.
+     * @param {function} props.onSelectPlan - Callback function when a plan is selected.
+     */
     function Pricing({ onSelectPlan }) {
       return (
         React.createElement("section", { id: "pricing-section", className: "py-20 sm:py-28 bg-zinc-900" },
@@ -195,6 +235,12 @@
       );
     }
 
+    /**
+     * BookingForm component for submitting booking details.
+     * @param {object} props - Component props.
+     * @param {object} props.plan - The selected pricing plan.
+     * @param {function} props.onCancel - Callback to cancel the booking process and return to plan selection.
+     */
     function BookingForm({ plan, onCancel }) {
       const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
       const [startTime, setStartTime] = useState('');
@@ -203,31 +249,50 @@
       const [name, setName] = useState('');
       const [phone, setPhone] = useState('');
       const [formError, setFormError] = useState('');
-      const [showUpiModal, setShowUpiModal] = useState(false);
-      const [pendingBooking, setPendingBooking] = useState(null);
-      const [bookings, setBookings] = useState([]);
-      const [confirmedBooking, setConfirmedBooking] = useState(null);
+      const [bookings, setBookings] = useState([]); // All bookings for availability check
 
+      // New states for the approval flow
+      const [bookingAwaitingApproval, setBookingAwaitingApproval] = useState(null); // Stores booking details while pending admin approval
+      const [showPaymentModal, setShowPaymentModal] = useState(false); // Controls visibility of UPI modal
+      const [confirmedBooking, setConfirmedBooking] = useState(null); // Stores confirmed booking details for final message
+
+      // Listen to all bookings for availability checks
       useEffect(() => {
         return listenBookings(setBookings);
       }, []);
 
+      // Reset end time when date or start time changes
       useEffect(() => { setStartTime(''); setEndTime(''); }, [date]);
       useEffect(() => { setEndTime(''); }, [startTime]);
 
+      // Listen to the specific booking's status if it's awaiting approval
       useEffect(() => {
-        if (pendingBooking) {
-          const updatedBooking = bookings.find(b => b.id === pendingBooking.id);
-          if (updatedBooking && updatedBooking.status === 'confirmed') {
-            setShowUpiModal(false);
-            setConfirmedBooking(updatedBooking);
-            setPendingBooking(null);
-          }
+        if (bookingAwaitingApproval && bookingAwaitingApproval.id) {
+          const unsubscribe = listenToBooking(bookingAwaitingApproval.id, (updatedBooking) => {
+            if (updatedBooking) {
+              if (updatedBooking.status === 'confirmed') {
+                setConfirmedBooking(updatedBooking); // Set for final confirmation message
+                setShowPaymentModal(true); // Show UPI modal
+                setBookingAwaitingApproval(null); // Clear awaiting approval state
+              } else if (updatedBooking.status === 'cancelled') {
+                // If cancelled, show the UPI modal, which will then display the cancellation message
+                // The UpiPaymentModal already handles rendering the cancellation message based on status
+                setShowPaymentModal(true);
+                setBookingAwaitingApproval(null); // Clear awaiting approval state
+              }
+            } else {
+              // Booking might have been deleted by admin before confirmation/cancellation
+              // Treat as cancelled for user's perspective
+              setShowPaymentModal(true); // Use UPI modal to show cancellation
+              setBookingAwaitingApproval(null);
+            }
+          });
+          return () => unsubscribe(); // Cleanup listener on unmount or dependency change
         }
-      }, [bookings, pendingBooking]);
+      }, [bookingAwaitingApproval]); // Only re-run when bookingAwaitingApproval changes
 
       const getUnavailableHours = useCallback((date) => {
-        const dayBookings = bookings.filter(b => b.date === date && b.status === 'confirmed');
+        const dayBookings = bookings.filter(b => b.date === date && b.status === 'confirmed'); // Only confirmed bookings block slots
         let hours = [];
         dayBookings.forEach(b => {
           const start = parseInt(b.startTime.split(':')[0], 10);
@@ -242,10 +307,20 @@
       const endTimes = useMemo(() => {
         if (!startTime) return [];
         const startHour = parseInt(startTime.split(':')[0], 10);
-        let nextUnavailableHour = 23;
-        for (const hour of unavailableHours.sort((a,b) => a - b)) { if (hour > startHour) { nextUnavailableHour = hour; break; } }
-        return HOURLY_SLOTS.map(time => parseInt(time.split(':')[0], 10)).filter(hour => hour > startHour && hour <= nextUnavailableHour).map(hour => ({ value: `${hour < 10 ? '0' : ''}${hour}:00` }));
+        let nextUnavailableHour = 23; // Default to end of day
+        // Find the next hour that is unavailable after the selected start time
+        for (const hour of unavailableHours.sort((a,b) => a - b)) {
+            if (hour > startHour) {
+                nextUnavailableHour = hour;
+                break;
+            }
+        }
+        // Filter end times to be after start time and before any unavailable hour
+        return HOURLY_SLOTS.map(time => parseInt(time.split(':')[0], 10))
+            .filter(hour => hour > startHour && hour <= nextUnavailableHour)
+            .map(hour => ({ value: `${hour < 10 ? '0' : ''}${hour}:00` }));
       }, [startTime, unavailableHours]);
+
       const duration = useMemo(() => {
         if (!startTime || !endTime) return 0;
         return parseInt(endTime.split(':')[0], 10) - parseInt(startTime.split(':')[0], 10);
@@ -253,10 +328,20 @@
       const totalAmount = plan.price * duration;
       const paymentAmount = paymentOption === "full" ? totalAmount : Math.ceil(totalAmount / 2);
 
+      /**
+       * Validates an Indian phone number.
+       * @param {string} num - The phone number to validate.
+       * @returns {boolean} True if valid, false otherwise.
+       */
       function isValidPhone(num) {
         return /^[6-9]\d{9}$/.test(num);
       }
 
+      /**
+       * Handles the form submission for booking.
+       * Creates a pending booking and waits for admin approval.
+       * @param {Event} e - The form submission event.
+       */
       const handleSubmit = (e) => {
         e.preventDefault();
         setFormError('');
@@ -272,7 +357,7 @@
           setFormError('End time must be after start time.');
           return;
         }
-        // Check for booking conflicts
+        // Check for booking conflicts based on confirmed bookings
         const startHour = parseInt(startTime.split(':')[0], 10);
         const endHour = parseInt(endTime.split(':')[0], 10);
         for (let hour = startHour; hour < endHour; hour++) {
@@ -281,7 +366,7 @@
             return;
           }
         }
-        // Create booking object
+        // Create booking object with 'pending' status
         const booking = {
           name,
           phone,
@@ -289,19 +374,22 @@
           date,
           startTime,
           endTime,
-          status: 'pending',
+          status: 'pending', // Initial status is pending
           amount: totalAmount,
-          paid: paymentOption === "full" ? totalAmount : paymentAmount,
+          paid: 0, // No payment made yet
           paymentOption,
           createdAt: new Date().toISOString(),
         };
         createBooking(booking).then(ref => {
-          setPendingBooking({ ...booking, id: ref.key });
-          setShowUpiModal(true);
+          setBookingAwaitingApproval({ ...booking, id: ref.key }); // Store for listening
+        }).catch(error => {
+          console.error("Error creating booking:", error);
+          setFormError("Failed to create booking. Please try again.");
         });
       };
 
-      if (confirmedBooking) {
+      // Render confirmation message after payment
+      if (confirmedBooking && confirmedBooking.status === 'confirmed') {
         return (
           React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
             React.createElement("h2", { className: "text-2xl font-bold mb-4 text-green-400" }, "Your booking is confirmed!"),
@@ -312,22 +400,62 @@
             React.createElement("div", { className: "mt-4" },
               React.createElement("button", {
                 className: "bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors",
-                onClick: () => { setConfirmedBooking(null); onCancel(); }
+                onClick: () => { setConfirmedBooking(null); onCancel(); } // Reset and go back to plan selection
               }, "OK")
             )
           )
         );
       }
 
+      // Render UPI payment modal if payment is due (after admin approval)
+      if (showPaymentModal) {
+        // Pass the booking that was just confirmed/cancelled to the UPI modal
+        const bookingToPass = confirmedBooking || bookingAwaitingApproval;
+        return React.createElement(UpiPaymentModal, {
+          isOpen: showPaymentModal,
+          onClose: () => {
+            setShowPaymentModal(false);
+            setBookingAwaitingApproval(null); // Clear state after modal closes
+            setConfirmedBooking(null); // Clear confirmed state
+            onCancel(); // Go back to plan selection
+          },
+          amount: paymentAmount, // This amount is calculated based on the initial form data
+          booking: bookingToPass // Pass the booking details for ID and status check
+        });
+      }
+
+      // Render message while waiting for admin approval
+      if (bookingAwaitingApproval) {
+        return (
+          React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
+            React.createElement("h2", { className: "text-2xl font-bold mb-4 text-yellow-400" }, "Booking Submitted!"),
+            React.createElement("p", { className: "text-lg text-gray-300 mb-4" }, "Your booking request (ID: ", React.createElement("b", null, bookingAwaitingApproval.id), ") has been submitted and is awaiting admin approval."),
+            React.createElement("p", { className: "text-md text-gray-400 mb-6" }, "You will be automatically redirected to the payment page once your booking is approved, or notified if it's cancelled."),
+            React.createElement("div", { className: "flex justify-center items-center space-x-2" },
+                React.createElement("div", { className: "animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-400" }),
+                React.createElement("p", { className: "text-gray-300" }, "Waiting for admin approval...")
+            ),
+            React.createElement("button", {
+              className: "mt-8 bg-zinc-600 text-white font-bold py-2 px-6 rounded hover:bg-zinc-700 transition-colors",
+              onClick: () => {
+                setBookingAwaitingApproval(null); // Allow user to go back to main page
+                onCancel();
+              }
+            }, "Go Back to Plans")
+          )
+        );
+      }
+
+      // Render the initial booking form
       return (
         React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700" },
           React.createElement("h2", { className: "text-2xl font-bold mb-6 text-white" }, `Book ${plan.name}`),
           React.createElement("form", { onSubmit: handleSubmit, autoComplete: "off" },
             React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Your Name"),
-            React.createElement("input", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white", value: name, onChange: e => setName(e.target.value), autoComplete: "off" }),
+            React.createElement("input", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: name, onChange: e => setName(e.target.value), autoComplete: "off" }),
             React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Phone Number"),
             React.createElement("input", {
-              className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white",
+              className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg",
               value: phone,
               onChange: e => setPhone(e.target.value.replace(/\D/g, '').slice(0,10)), // Only digits, max 10
               maxLength: 10,
@@ -336,16 +464,16 @@
               placeholder: "10-digit mobile"
             }),
             React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Date"),
-            React.createElement("input", { type: "date", className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white", value: date, onChange: e => setDate(e.target.value), min: new Date().toISOString().split('T')[0] }),
+            React.createElement("input", { type: "date", className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: date, onChange: e => setDate(e.target.value), min: new Date().toISOString().split('T')[0] }),
             React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Start Time"),
-            React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white", value: startTime, onChange: e => setStartTime(e.target.value) },
+            React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: startTime, onChange: e => setStartTime(e.target.value) },
               React.createElement("option", { value: "" }, "Select start time"),
               startTimes.map(({ value, disabled }) =>
                 React.createElement("option", { key: value, value, disabled }, value)
               )
             ),
             React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "End Time"),
-            React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white", value: endTime, onChange: e => setEndTime(e.target.value) },
+            React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: endTime, onChange: e => setEndTime(e.target.value) },
               React.createElement("option", { value: "" }, "Select end time"),
               endTimes.map(({ value }) =>
                 React.createElement("option", { key: value, value }, value)
@@ -354,40 +482,41 @@
             React.createElement("div", { className: "mb-4" },
               React.createElement("span", { className: "text-gray-300" }, "Payment Option: "),
               React.createElement("label", { className: "ml-2" },
-                React.createElement("input", { type: "radio", value: "full", checked: paymentOption === "full", onChange: () => setPaymentOption('full') }),
+                React.createElement("input", { type: "radio", value: "full", checked: paymentOption === "full", onChange: () => setPaymentOption('full'), className: "form-radio text-yellow-500" }),
                 React.createElement("span", { className: "ml-1" }, "Full")
               ),
               React.createElement("label", { className: "ml-4" },
-                React.createElement("input", { type: "radio", value: "half", checked: paymentOption === "half", onChange: () => setPaymentOption('half') }),
+                React.createElement("input", { type: "radio", value: "half", checked: paymentOption === "half", onChange: () => setPaymentOption('half'), className: "form-radio text-yellow-500" }),
                 React.createElement("span", { className: "ml-1" }, "50% Advance")
               )
             ),
             React.createElement("div", { className: "mb-4" },
               React.createElement("span", { className: "text-gray-300" }, "Total: "),
               React.createElement("span", { className: "text-yellow-400 font-bold text-lg" }, `₹${totalAmount.toLocaleString('en-IN')}`),
-              paymentOption === "half" && React.createElement("span", { className: "ml-2 text-green-400" }, `(Pay ₹${paymentAmount} now)`)
+              paymentOption === "half" && React.createElement("span", { className: "ml-2 text-green-400" }, `(Pay ₹${paymentAmount.toLocaleString('en-IN')} now)`)
             ),
             formError && React.createElement("div", { className: "mb-4 text-red-400" }, formError),
             React.createElement("div", { className: "flex space-x-4" },
-              React.createElement("button", { type: "submit", className: "bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors" }, "Book & Pay"),
-              React.createElement("button", { type: "button", className: "bg-zinc-600 text-white font-bold py-2 px-6 rounded hover:bg-zinc-700 transition-colors", onClick: onCancel }, "Cancel")
+              React.createElement("button", { type: "submit", className: "bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded-lg hover:bg-yellow-600 transition-colors shadow" }, "Submit Booking"),
+              React.createElement("button", { type: "button", className: "bg-zinc-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-zinc-700 transition-colors shadow", onClick: onCancel }, "Cancel")
             )
-          ),
-          showUpiModal && pendingBooking && React.createElement(UpiPaymentModal, {
-            isOpen: showUpiModal,
-            onClose: () => { setShowUpiModal(false); setPendingBooking(null); },
-            amount: paymentAmount,
-            booking: { ...pendingBooking, id: pendingBooking.id }
-          })
+          )
         )
       );
     }
 
-    // --- UPI Payment Modal: QR code and UPI deep link only, BRIGHT UPI ID ---
+    /**
+     * UPI Payment Modal component.
+     * @param {object} props - Component props.
+     * @param {boolean} props.isOpen - Whether the modal is open.
+     * @param {function} props.onClose - Callback to close the modal.
+     * @param {number} props.amount - The amount to be paid.
+     * @param {object} props.booking - The booking object (includes ID and current status).
+     */
     function UpiPaymentModal({ isOpen, onClose, amount, booking }) {
       const UPI_ID = 'qr.possible@sib';
       const STUDIO_NAME = 'Possible Studio';
-      const CONTACT_NUMBER = '9994858927'; // Added contact number
+      const CONTACT_NUMBER = '9994858927';
       const QR_CODE_URL = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' +
         encodeURIComponent(
           `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${amount}&cu=INR&tn=Booking%20ID%20${booking.id || ''}`
@@ -401,18 +530,14 @@
         setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent));
       }, []);
 
+      // Listen to the specific booking's status to update the modal content
       useEffect(() => {
         if (isOpen && booking && booking.id) {
           const unsubscribe = listenToBooking(booking.id, (updatedBooking) => {
             if (updatedBooking) {
               setCurrentBookingStatus(updatedBooking.status);
-              // If booking is cancelled, keep modal open to show cancellation message
-              if (updatedBooking.status === 'cancelled') {
-                // No specific action needed here, the render logic will handle displaying the message
-              } else if (updatedBooking.status === 'confirmed') {
-                // If confirmed, allow the BookingForm to handle closing the UPI modal and showing confirmation
-                onClose();
-              }
+              // If confirmed, the BookingForm will handle closing this modal
+              // If cancelled, this modal will display the cancellation message
             } else {
               // Booking removed from database (e.g., deleted by admin), treat as cancelled
               setCurrentBookingStatus('cancelled');
@@ -420,7 +545,7 @@
           });
           return () => unsubscribe();
         }
-      }, [isOpen, booking, onClose]);
+      }, [isOpen, booking]); // Re-run if modal opens or booking changes
 
       if (!isOpen || !booking) return null;
 
@@ -429,6 +554,7 @@
         window.location.href = upiUrl;
       };
 
+      // Render cancellation message if booking status is cancelled
       if (currentBookingStatus === 'cancelled') {
         return (
           React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
@@ -438,7 +564,7 @@
               React.createElement("p", { className: "text-md text-red-200 mb-4" }, "For more details, please call: ", React.createElement("a", { href: `tel:${CONTACT_NUMBER}`, className: "text-yellow-400 hover:underline" }, CONTACT_NUMBER)),
               React.createElement("p", { className: "text-sm text-red-300 mb-6" }, "If you have already made a payment, your refund will be processed within 24 hours."),
               React.createElement("button", {
-                onClick: onClose,
+                onClick: onClose, // Close modal and reset BookingForm state
                 className: "bg-red-700 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-800 transition-colors"
               }, "Close")
             )
@@ -446,6 +572,7 @@
         );
       }
 
+      // Render payment details if booking status is confirmed (or initially pending before this change)
       return (
         React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
           React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative" },
@@ -492,6 +619,9 @@
       );
     }
 
+    /**
+     * Main App component.
+     */
     function App() {
       const [selectedPlan, setSelectedPlan] = useState(null);
 
