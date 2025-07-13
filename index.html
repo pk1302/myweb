@@ -557,23 +557,23 @@ useEffect(() => {
 
       // Listen to the specific booking's status to update the modal content
       useEffect(() => {
-        if (isOpen && booking && booking.id) {
-          const unsubscribe = listenToBooking(booking.id, (updatedBooking) => {
-            if (updatedBooking) {
-              setCurrentBookingStatus(updatedBooking.status);
-              // If status becomes 'paid', close this modal as BookingForm will handle final confirmation
-              if (updatedBooking.status === 'paid') {
-  // Do not close modal — let BookingForm show confirmation screen
-  return;
-}
-            } else {
-              // Booking removed from database (e.g., deleted by admin), treat as cancelled
-              setCurrentBookingStatus('cancelled');
-            }
-          });
-          return () => unsubscribe();
+  if (isOpen && booking && booking.id) {
+    const unsubscribe = listenToBooking(booking.id, (updatedBooking) => {
+      if (updatedBooking) {
+        setCurrentBookingStatus(updatedBooking.status);
+        if (updatedBooking.status === 'paid') {
+          onClose(); // ✅ Close the modal when payment is done
+          return;
         }
-      }, [isOpen, booking, onClose]); // Re-run if modal opens, booking changes, or onClose changes
+      } else {
+        // Booking deleted
+        setCurrentBookingStatus('cancelled');
+      }
+    });
+    return () => unsubscribe();
+  }
+}, [isOpen, booking, onClose]);
+ // Re-run if modal opens, booking changes, or onClose changes
 
       if (!isOpen || !booking) return null;
 
