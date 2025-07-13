@@ -308,7 +308,11 @@
       }, [bookingAwaitingAction ? bookingAwaitingAction.id : null]); // Only re-run when bookingAwaitingAction.id changes
 
       const getUnavailableHours = useCallback((date) => {
-        const dayBookings = bookings.filter(b => b.date === date && b.status === 'confirmed'); // Only confirmed bookings block slots
+        // Now, pending, confirmed, and paid bookings will block slots
+        const dayBookings = bookings.filter(b => 
+          b.date === date && 
+          (b.status === 'pending' || b.status === 'confirmed' || b.status === 'paid')
+        );
         let hours = [];
         dayBookings.forEach(b => {
           const start = parseInt(b.startTime.split(':')[0], 10);
