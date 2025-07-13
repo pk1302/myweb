@@ -264,7 +264,7 @@
       // States for the approval/payment flow
       const [bookingAwaitingAction, setBookingAwaitingAction] = useState(null); // Stores booking details while pending admin approval or payment
       const [showPaymentModal, setShowPaymentModal] = useState(false); // Controls visibility of UPI modal
-      const [showFinalConfirmation, setShowFinalConfirmation] = useState(false); // Controls visibility of final confirmation message
+      // Removed showFinalConfirmation state, will derive directly from bookingAwaitingAction.status
 
       // Listen to all bookings for availability checks
       useEffect(() => {
@@ -280,27 +280,19 @@
         if (bookingAwaitingAction && bookingAwaitingAction.id) {
           const unsubscribe = listenToBooking(bookingAwaitingAction.id, (updatedBooking) => {
             if (updatedBooking) {
-              if (updatedBooking.status === 'confirmed') {
-                // Admin approved, show payment option
-                setBookingAwaitingAction(updatedBooking); // Update with latest confirmed data
-                setShowPaymentModal(true);
-                setShowFinalConfirmation(false); // Ensure final confirmation is hidden
-              } else if (updatedBooking.status === 'paid') {
-                // Admin marked as paid, show final confirmation
-                setBookingAwaitingAction(updatedBooking); // Update with latest paid data
-                setShowPaymentModal(false); // Hide payment modal
-                setShowFinalConfirmation(true); // Show final confirmation
-              } else if (updatedBooking.status === 'cancelled') {
-                // If cancelled, show the UPI modal, which will then display the cancellation message
-                setBookingAwaitingAction(updatedBooking); // Update with latest cancelled data
-                setShowPaymentModal(true); // UPI modal handles cancellation message
-                setShowFinalConfirmation(false);
+              // Always update bookingAwaitingAction to reflect the latest state from Firebase
+              setBookingAwaitingAction(updatedBooking);
+
+              // Control modal visibility based on status
+              if (updatedBooking.status === 'confirmed' || updatedBooking.status === 'cancelled') {
+                setShowPaymentModal(true); // Show UPI modal for payment or cancellation message
+              } else {
+                setShowPaymentModal(false); // Hide UPI modal for pending or paid
               }
             } else {
-              // Booking might have been deleted by admin, treat as cancelled
-              setBookingAwaitingAction({ ...bookingAwaitingAction, status: 'cancelled' });
-              setShowPaymentModal(true); // UPI modal handles cancellation message
-              setShowFinalConfirmation(false);
+              // Booking removed from database (e.g., deleted by admin), treat as cancelled
+              setBookingAwaitingAction(prev => ({ ...prev, status: 'cancelled' })); // Mark as cancelled locally
+              setShowPaymentModal(true); // Show UPI modal to display cancellation message
             }
           });
           return () => unsubscribe(); // Cleanup listener on unmount or dependency change
@@ -408,46 +400,65 @@
         });
       };
 
-      // Render final confirmation message if booking is marked as paid
-      if (showFinalConfirmation && bookingAwaitingAction && bookingAwaitingAction.status === 'paid') {
-        return (
-          React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
-            React.createElement("h2", { className: "text-2xl font-bold mb-4 text-green-400" }, "Your booking is confirmed!"),
-            React.createElement("div", { className: "mb-2" }, React.createElement("b", null, bookingAwaitingAction.plan)),
-            React.createElement("div", null, "Date: ", React.createElement("b", null, bookingAwaitingAction.date)),
-            React.createElement("div", null, "Time: ", React.createElement("b", null, `${bookingAwaitingAction.startTime} - ${bookingAwaitingAction.endTime}`)),
-            React.createElement("div", null, "Booking ID: ", React.createElement("b", null, bookingAwaitingAction.id)),
-            React.createElement("p", { className: "mt-4 text-gray-300" }, "Thank you for your payment."),
-            React.createElement("div", { className: "mt-4" },
-              React.createElement("button", {
-                className: "bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors",
-                onClick: () => { 
-                  setBookingAwaitingAction(null); 
-                  setShowFinalConfirmation(false);
-                  onCancel(); // Reset and go back to plan selection
-                }
-              }, "OK")
+      // --- Conditional Rendering Logic ---
+      if (bookingAwaitingAction) {
+        if (bookingAwaitingAction.status === 'paid') {
+          // Show final confirmation message if status is 'paid'
+          return (
+            React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
+              React.createElement("h2", { className: "text-2xl font-bold mb-4 text-green-400" }, "Your booking is confirmed!"),
+              React.createElement("div", { className: "mb-2" }, React.createElement("b", null, bookingAwaitingAction.plan)),
+              React.createElement("div", null, "Date: ", React.createElement("b", null, bookingAwaitingAction.date)),
+              React.createElement("div", null, "Time: ", React.createElement("b", null, `${bookingAwaitingAction.startTime} - ${bookingAwaitingAction.endTime}`)),
+              React.createElement("div", null, "Booking ID: ", React.createElement("b", null, bookingAwaitingAction.id)),
+              React.createElement("p", { className: "mt-4 text-gray-300" }, "Thank you for your payment."),
+              React.createElement("div", { className: "mt-4" },
+                React.createElement("button", {
+                  className: "bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors",
+                  onClick: () => { 
+                    setBookingAwaitingAction(null); 
+                    onCancel(); // Reset and go back to plan selection
+                  }
+                }, "OK")
+              )
             )
-          )
-        );
+          );
+        } else if (bookingAwaitingAction.status === 'pending') {
+          // Show pending message if status is 'pending'
+          return (
+            React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
+              React.createElement("h2", { className: "text-2xl font-bold mb-4 text-yellow-400" }, "Booking Submitted!"),
+              React.createElement("p", { className: "text-lg text-gray-300 mb-4" }, "Your booking request (ID: ", React.createElement("b", null, bookingAwaitingAction.id), ") has been submitted and is awaiting admin approval."),
+              React.createElement("p", { className: "text-md text-gray-400 mb-6" }, "You will be automatically redirected to the payment page once your booking is approved, or notified if it's cancelled."),
+              React.createElement("div", { className: "flex justify-center items-center space-x-2" },
+                  React.createElement("div", { className: "animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-400" }),
+                  React.createElement("p", { className: "text-gray-300" }, "Waiting for admin approval...")
+              ),
+              React.createElement("button", {
+                className: "mt-8 bg-zinc-600 text-white font-bold py-2 px-6 rounded hover:bg-zinc-700 transition-colors",
+                onClick: () => {
+                  setBookingAwaitingAction(null); // Allow user to go back to main page
+                  onCancel();
+                }
+              }, "Go Back to Plans")
+            )
+          );
+        }
       }
 
-      // Render UPI payment modal if payment is due (after admin approval or if cancelled)
+      // Render UPI payment modal if showPaymentModal is true AND bookingAwaitingAction exists
+      // This will cover 'confirmed' and 'cancelled' statuses, as controlled by the useEffect.
       if (showPaymentModal && bookingAwaitingAction) {
         return React.createElement(UpiPaymentModal, {
           isOpen: showPaymentModal,
           onClose: () => {
-            // When UPI modal closes, we don't immediately clear bookingAwaitingAction
-            // The useEffect will handle the transition to final confirmation if status is 'paid'
-            // Or it will keep the cancellation message if status is 'cancelled'
-            setShowPaymentModal(false);
-            // Only if it's cancelled, we want to reset and go back to plans immediately
+            setShowPaymentModal(false); // Just close the modal UI
+            // If it was cancelled, reset the booking state to go back to plans
             if (bookingAwaitingAction.status === 'cancelled') {
                 setBookingAwaitingAction(null);
-                setShowFinalConfirmation(false);
                 onCancel();
             }
-            // If it's confirmed (awaiting payment) and user closes, we keep bookingAwaitingAction
+            // If it was confirmed (awaiting payment) and user closes, we keep bookingAwaitingAction
             // so the useEffect can still listen for 'paid' status.
           },
           amount: paymentAmount, // This amount is calculated based on the initial form data
@@ -455,29 +466,7 @@
         });
       }
 
-      // Render message while waiting for admin approval
-      if (bookingAwaitingAction && bookingAwaitingAction.status === 'pending') {
-        return (
-          React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
-            React.createElement("h2", { className: "text-2xl font-bold mb-4 text-yellow-400" }, "Booking Submitted!"),
-            React.createElement("p", { className: "text-lg text-gray-300 mb-4" }, "Your booking request (ID: ", React.createElement("b", null, bookingAwaitingAction.id), ") has been submitted and is awaiting admin approval."),
-            React.createElement("p", { className: "text-md text-gray-400 mb-6" }, "You will be automatically redirected to the payment page once your booking is approved, or notified if it's cancelled."),
-            React.createElement("div", { className: "flex justify-center items-center space-x-2" },
-                React.createElement("div", { className: "animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-400" }),
-                React.createElement("p", { className: "text-gray-300" }, "Waiting for admin approval...")
-            ),
-            React.createElement("button", {
-              className: "mt-8 bg-zinc-600 text-white font-bold py-2 px-6 rounded hover:bg-zinc-700 transition-colors",
-              onClick: () => {
-                setBookingAwaitingAction(null); // Allow user to go back to main page
-                onCancel();
-              }
-            }, "Go Back to Plans")
-          )
-        );
-      }
-
-      // Render the initial booking form
+      // Default: Render the initial booking form if no booking is awaiting action
       return (
         React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700" },
           React.createElement("h2", { className: "text-2xl font-bold mb-6 text-white" }, `Book ${plan.name}`),
@@ -569,7 +558,7 @@
           const unsubscribe = listenToBooking(booking.id, (updatedBooking) => {
             if (updatedBooking) {
               setCurrentBookingStatus(updatedBooking.status);
-              // If status becomes 'paid', close this modal and let BookingForm show final confirmation
+              // If status becomes 'paid', close this modal as BookingForm will handle final confirmation
               if (updatedBooking.status === 'paid') {
                 onClose(); 
               }
