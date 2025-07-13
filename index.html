@@ -670,7 +670,23 @@ return (
         )
       );
     }
+function App() {
+  const [selectedPlan, setSelectedPlan] = React.useState(null);
 
+  return (
+    React.createElement(HashRouter, null,
+      React.createElement("div", null,
+        React.createElement(Header),
+        React.createElement("main", { className: "min-h-screen py-12" },
+          selectedPlan
+            ? React.createElement(BookingForm, { plan: selectedPlan, onCancel: () => setSelectedPlan(null) })
+            : React.createElement(Pricing, { onSelectPlan: setSelectedPlan })
+        ),
+        React.createElement(Footer)
+      )
+    )
+  );
+}
     ReactDOM.render(
       React.createElement(App),
       document.getElementById('root')
