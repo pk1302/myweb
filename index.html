@@ -452,22 +452,20 @@ useEffect(() => {
       // Render UPI payment modal if showPaymentModal is true AND bookingAwaitingAction exists
       // This will cover 'confirmed' and 'cancelled' statuses, as controlled by the useEffect.
       if (showPaymentModal && bookingAwaitingAction) {
-        return React.createElement(UpiPaymentModal, {
-          isOpen: showPaymentModal,
-          onClose: () => {
-            setShowPaymentModal(false); // Just close the modal UI
-            // If it was cancelled, reset the booking state to go back to plans
-            if (bookingAwaitingAction.status === 'cancelled') {
-                setBookingAwaitingAction(null);
-                onCancel();
-            }
-            // If it was confirmed (awaiting payment) and user closes, we keep bookingAwaitingAction
-            // so the useEffect can still listen for 'paid' status.
-          },
-          amount: paymentAmount, // This amount is calculated based on the initial form data
-          booking: bookingAwaitingAction // Pass the booking details for ID and status check
-        });
-      }
+      return React.createElement(UpiPaymentModal, {
+        isOpen: showPaymentModal,
+        onClose: () => {
+          setShowPaymentModal(false);
+          if (bookingAwaitingAction.status === 'cancelled') {
+            setBookingAwaitingAction(null);
+            onCancel();
+          }
+          // Do NOT reset bookingAwaitingAction if status is 'paid'
+        },
+        amount: paymentAmount,
+        booking: bookingAwaitingAction
+      });
+    }
 
       // Default: Render the initial booking form if no booking is awaiting action
       return (
@@ -557,22 +555,21 @@ useEffect(() => {
 
       // Listen to the specific booking's status to update the modal content
       useEffect(() => {
-  if (isOpen && booking && booking.id) {
-    const unsubscribe = listenToBooking(booking.id, (updatedBooking) => {
-      if (updatedBooking) {
-        setCurrentBookingStatus(updatedBooking.status);
-        if (updatedBooking.status === 'paid') {
-          onClose(); // ✅ Close the modal when payment is done
-          return;
-        }
-      } else {
-        // Booking deleted
-        setCurrentBookingStatus('cancelled');
+      if (isOpen && booking && booking.id) {
+        const unsubscribe = listenToBooking(booking.id, (updatedBooking) => {
+          if (updatedBooking) {
+            setCurrentBookingStatus(updatedBooking.status);
+            if (updatedBooking.status === 'paid') {
+              onClose(); // Close modal
+            }
+          } else {
+            setCurrentBookingStatus('cancelled');
+            onClose(); // Handle deletion
+          }
+        });
+        return () => unsubscribe();
       }
-    });
-    return () => unsubscribe();
-  }
-}, [isOpen, booking, onClose]);
+    }, [isOpen, booking, onClose]);
  // Re-run if modal opens, booking changes, or onClose changes
 
       if (!isOpen || !booking) return null;
