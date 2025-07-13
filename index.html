@@ -7,10 +7,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <style>body { font-family: 'Inter', sans-serif; }</style>
-  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <!-- React UMD -->
   <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/react-router-dom@5.3.4/umd/react-router-dom.min.js"></script>
@@ -48,6 +46,16 @@
       });
       return () => ref.off();
     }
+    // Listen to a specific booking's changes
+    function listenToBooking(bookingId, callback) {
+      const ref = db.ref(`bookings/${bookingId}`);
+      ref.on('value', snapshot => {
+        const val = snapshot.val();
+        callback(val ? { id: bookingId, ...val } : null);
+      });
+      return () => ref.off();
+    }
+
 
     // --- UI Data ---
     const PRICING_PLANS = [
@@ -379,17 +387,40 @@
     function UpiPaymentModal({ isOpen, onClose, amount, booking }) {
       const UPI_ID = 'qr.possible@sib';
       const STUDIO_NAME = 'Possible Studio';
+      const CONTACT_NUMBER = '9994858927'; // Added contact number
       const QR_CODE_URL = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' +
         encodeURIComponent(
           `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${amount}&cu=INR&tn=Booking%20ID%20${booking.id || ''}`
         );
       const [isMobile, setIsMobile] = React.useState(false);
       const [isIOS, setIsIOS] = React.useState(false);
+      const [currentBookingStatus, setCurrentBookingStatus] = useState(booking.status);
 
-      React.useEffect(() => {
+      useEffect(() => {
         setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
         setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent));
       }, []);
+
+      useEffect(() => {
+        if (isOpen && booking && booking.id) {
+          const unsubscribe = listenToBooking(booking.id, (updatedBooking) => {
+            if (updatedBooking) {
+              setCurrentBookingStatus(updatedBooking.status);
+              // If booking is cancelled, keep modal open to show cancellation message
+              if (updatedBooking.status === 'cancelled') {
+                // No specific action needed here, the render logic will handle displaying the message
+              } else if (updatedBooking.status === 'confirmed') {
+                // If confirmed, allow the BookingForm to handle closing the UPI modal and showing confirmation
+                onClose();
+              }
+            } else {
+              // Booking removed from database (e.g., deleted by admin), treat as cancelled
+              setCurrentBookingStatus('cancelled');
+            }
+          });
+          return () => unsubscribe();
+        }
+      }, [isOpen, booking, onClose]);
 
       if (!isOpen || !booking) return null;
 
@@ -397,6 +428,23 @@
         const upiUrl = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${amount.toFixed(2)}&cu=INR&tn=Booking%20ID%20${booking.id}`;
         window.location.href = upiUrl;
       };
+
+      if (currentBookingStatus === 'cancelled') {
+        return (
+          React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
+            React.createElement("div", { className: "bg-red-900 p-6 rounded-2xl shadow-2xl border border-red-700 w-full max-w-md relative text-center" },
+              React.createElement("h2", { className: "text-2xl font-bold mb-4 text-white" }, "Booking Cancellation Notification"),
+              React.createElement("p", { className: "text-lg text-red-100 mb-4" }, "Your booking has been cancelled."),
+              React.createElement("p", { className: "text-md text-red-200 mb-4" }, "For more details, please call: ", React.createElement("a", { href: `tel:${CONTACT_NUMBER}`, className: "text-yellow-400 hover:underline" }, CONTACT_NUMBER)),
+              React.createElement("p", { className: "text-sm text-red-300 mb-6" }, "If you have already made a payment, your refund will be processed within 24 hours."),
+              React.createElement("button", {
+                onClick: onClose,
+                className: "bg-red-700 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-800 transition-colors"
+              }, "Close")
+            )
+          )
+        );
+      }
 
       return (
         React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
