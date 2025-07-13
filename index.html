@@ -563,8 +563,9 @@ useEffect(() => {
               setCurrentBookingStatus(updatedBooking.status);
               // If status becomes 'paid', close this modal as BookingForm will handle final confirmation
               if (updatedBooking.status === 'paid') {
-                onClose(); 
-              }
+  // Do not close modal — let BookingForm show confirmation screen
+  return;
+}
             } else {
               // Booking removed from database (e.g., deleted by admin), treat as cancelled
               setCurrentBookingStatus('cancelled');
