@@ -598,73 +598,72 @@ useEffect(() => {
   }
 
   if (showConfirmation && currentBookingStatus === 'paid') {
-    return (
-      React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
-        React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative text-center" },
-          React.createElement("h2", { className: "text-2xl font-bold mb-4 text-green-400" }, "Booking Confirmed!"),
-          React.createElement("div", { className: "mb-2" }, React.createElement("b", null, booking.plan)),
-          React.createElement("div", null, "Date: ", React.createElement("b", null, booking.date)),
-          React.createElement("div", null, "Time: ", React.createElement("b", null, `${booking.startTime} - ${booking.endTime}`)),
-          React.createElement("div", null, "Booking ID: ", React.createElement("b", null, booking.id)),
-          React.createElement("p", { className: "mt-4 text-gray-300" }, "Thank you for your payment! Your booking is now fully confirmed."),
-          React.createElement("button", {
-            className: "mt-6 bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded-lg hover:bg-yellow-600 transition-colors",
-            onClick: () => {
-              setShowConfirmation(false);
-              onClose();
-            }
-          }, "OK")
-        )
-      )
-    );
-  }
-
-  const displayAmount = typeof amount === 'number' ? amount.toLocaleString('en-IN') : 'N/A';
-
   return (
     React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
-      React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative" },
-        React.createElement("button", { onClick: onClose, className: "absolute top-3 right-4 text-gray-400 hover:text-white transition-colors text-3xl font-light" }, "×"),
-        React.createElement("div", { className: "text-center mb-4" },
-          React.createElement("h2", { className: "text-2xl font-bold text-white" }, "Complete Your Payment")
-        ),
-        React.createElement("div", { className: "text-center mb-6" },
-          React.createElement("p", { className: "text-sm text-gray-400" }, "Your Booking ID"),
-          React.createElement("p", { className: "text-2xl font-bold text-yellow-400 tracking-widest bg-zinc-900 py-2 rounded-md font-mono" }, booking.id || ""),
-          React.createElement("p", { className: "text-xs text-yellow-500 mt-2" }, "Please add this ID to your UPI payment notes/remarks.")
-        ),
-        isIOS && (
-          React.createElement("div", { className: "mb-4 text-yellow-400 font-semibold" },
-            "On iPhone, please scan this QR with your UPI app to pay.",
-            React.createElement("br", null),
-            "Or use the UPI ID below in your app's 'Pay by UPI ID' option."
-          )
-        ),
-        isMobile && !isIOS && (
-          React.createElement("button", { onClick: handleMobilePay, className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-2 mb-4" },
-            React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-8 w-8", viewBox: "0 0 24 24", fill: "currentColor" },
-              React.createElement("path", { d: "M16.5 13.5h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zm-9-4h9c.83 0 1.5-.67 1.5-1.5S17.33 6.5 16.5 6.5h-9C6.67 6.5 6 7.17 6 8s.67 1.5 1.5 1.5z" })
-            ),
-            React.createElement("span", null, `Pay ₹${displayAmount} with UPI`)
-          )
-        ),
-        React.createElement("div", { className: "bg-white p-4 rounded-lg flex justify-center mb-2" },
-          React.createElement("img", { src: QR_CODE_URL, alt: "UPI QR Code", className: "w-48 h-48 object-contain" })
-        ),
-        React.createElement("div", { className: "text-center text-yellow-400 font-extrabold text-lg mb-2 tracking-wide" },
-          "UPI ID: ",
-          React.createElement("span", null, UPI_ID)
-        ),
-        React.createElement("div", { className: "mt-6 text-center bg-zinc-900/50 p-4 rounded-lg" },
-          React.createElement("div", { className: "flex justify-center items-center space-x-2" },
-            React.createElement("div", { className: "animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-400" }),
-            React.createElement("p", { className: "text-gray-300" }, "Waiting for payment confirmation...")
-          ),
-          React.createElement("p", { className: "text-xs text-gray-500 mt-2" }, "This window will close automatically once payment is verified.")
-        )
+      React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative text-center" },
+        React.createElement("h2", { className: "text-2xl font-bold mb-4 text-green-400" }, "Booking Confirmed!"),
+        React.createElement("div", { className: "mb-2" }, React.createElement("b", null, booking.plan)),
+        React.createElement("div", null, "Date: ", React.createElement("b", null, booking.date)),
+        React.createElement("div", null, "Time: ", React.createElement("b", null, `${booking.startTime} - ${booking.endTime}`)),
+        React.createElement("div", null, "Booking ID: ", React.createElement("b", null, booking.id)),
+        React.createElement("p", { className: "mt-4 text-gray-300" }, "Thank you for your payment! Your booking is now fully confirmed."),
+        React.createElement("button", {
+          className: "mt-6 bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded-lg hover:bg-yellow-600 transition-colors",
+          onClick: () => {
+            setShowConfirmation(false);
+            onClose();
+          }
+        }, "OK")
       )
     )
   );
+}
+
+// (otherwise, keep your original "waiting for payment" modal)
+return (
+  React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
+    React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative" },
+      React.createElement("button", { onClick: onClose, className: "absolute top-3 right-4 text-gray-400 hover:text-white transition-colors text-3xl font-light" }, "×"),
+      React.createElement("div", { className: "text-center mb-4" },
+        React.createElement("h2", { className: "text-2xl font-bold text-white" }, "Complete Your Payment")
+      ),
+      React.createElement("div", { className: "text-center mb-6" },
+        React.createElement("p", { className: "text-sm text-gray-400" }, "Your Booking ID"),
+        React.createElement("p", { className: "text-2xl font-bold text-yellow-400 tracking-widest bg-zinc-900 py-2 rounded-md font-mono" }, booking.id || ""),
+        React.createElement("p", { className: "text-xs text-yellow-500 mt-2" }, "Please add this ID to your UPI payment notes/remarks.")
+      ),
+      isIOS && (
+        React.createElement("div", { className: "mb-4 text-yellow-400 font-semibold" },
+          "On iPhone, please scan this QR with your UPI app to pay.",
+          React.createElement("br", null),
+          "Or use the UPI ID below in your app's 'Pay by UPI ID' option."
+        )
+      ),
+      isMobile && !isIOS && (
+        React.createElement("button", { onClick: handleMobilePay, className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-2 mb-4" },
+          React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-8 w-8", viewBox: "0 0 24 24", fill: "currentColor" },
+            React.createElement("path", { d: "M16.5 13.5h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zm-9-4h9c.83 0 1.5-.67 1.5-1.5S17.33 6.5 16.5 6.5h-9C6.67 6.5 6 7.17 6 8s.67 1.5 1.5 1.5z" })
+          ),
+          React.createElement("span", null, `Pay ₹${displayAmount} with UPI`)
+        )
+      ),
+      React.createElement("div", { className: "bg-white p-4 rounded-lg flex justify-center mb-2" },
+        React.createElement("img", { src: QR_CODE_URL, alt: "UPI QR Code", className: "w-48 h-48 object-contain" })
+      ),
+      React.createElement("div", { className: "text-center text-yellow-400 font-extrabold text-lg mb-2 tracking-wide" },
+        "UPI ID: ",
+        React.createElement("span", null, UPI_ID)
+      ),
+      React.createElement("div", { className: "mt-6 text-center bg-zinc-900/50 p-4 rounded-lg" },
+        React.createElement("div", { className: "flex justify-center items-center space-x-2" },
+          React.createElement("div", { className: "animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-400" }),
+          React.createElement("p", { className: "text-gray-300" }, "Waiting for payment confirmation...")
+        ),
+        React.createElement("p", { className: "text-xs text-gray-500 mt-2" }, "This window will close automatically once payment is verified.")
+      )
+    )
+  )
+);
 }
           ),
           React.createElement(Footer)
