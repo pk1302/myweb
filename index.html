@@ -38,7 +38,7 @@
     const useMemo = React.useMemo;
     const useCallback = React.useCallback;
 
-    const { HashRouter, Route, Switch, Link, Redirect, useLocation } = ReactRouterDOM;
+    const { HashRouter, Link } = ReactRouterDOM;
 
     // --- Booking CRUD with Firebase ---
     function createBooking(booking) {
@@ -210,10 +210,10 @@
       const [name, setName] = useState('');
       const [phone, setPhone] = useState('');
       const [formError, setFormError] = useState('');
-      const [bookings, setBookings] = useState([]); // All bookings for availability check
-      // Approval/payment states
+      const [bookings, setBookings] = useState([]);
       const [bookingAwaitingAction, setBookingAwaitingAction] = useState(null);
       const [showPaymentModal, setShowPaymentModal] = useState(false);
+      const [showThankYou, setShowThankYou] = useState(false);
 
       useEffect(() => {
         return listenBookings(setBookings);
@@ -328,47 +328,50 @@
         });
       };
 
-      if (bookingAwaitingAction) {
-        if (bookingAwaitingAction.status === 'paid') {
-          return (
-            React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
-              React.createElement("h2", { className: "text-2xl font-bold mb-4 text-green-400" }, "Your booking is confirmed!"),
-              React.createElement("div", { className: "mb-2" }, React.createElement("b", null, bookingAwaitingAction.plan)),
-              React.createElement("div", null, "Date: ", React.createElement("b", null, bookingAwaitingAction.date)),
-              React.createElement("div", null, "Time: ", React.createElement("b", null, `${bookingAwaitingAction.startTime} - ${bookingAwaitingAction.endTime}`)),
-              React.createElement("div", null, "Booking ID: ", React.createElement("b", null, bookingAwaitingAction.id)),
-              React.createElement("p", { className: "mt-4 text-gray-300" }, "Thank you for your payment."),
-              React.createElement("div", { className: "mt-4" },
-                React.createElement("button", {
-                  className: "bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors",
-                  onClick: () => {
-                    setBookingAwaitingAction(null);
-                    onCancel();
-                  }
-                }, "OK")
-              )
-            )
-          );
-        } else if (bookingAwaitingAction.status === 'pending') {
-          return (
-            React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
-              React.createElement("h2", { className: "text-2xl font-bold mb-4 text-yellow-400" }, "Booking Submitted!"),
-              React.createElement("p", { className: "text-lg text-gray-300 mb-4" }, "Your booking request (ID: ", React.createElement("b", null, bookingAwaitingAction.id), ") has been submitted and is awaiting admin approval."),
-              React.createElement("p", { className: "text-md text-gray-400 mb-6" }, "You will be automatically redirected to the payment page once your booking is approved, or notified if it's cancelled."),
-              React.createElement("div", { className: "flex justify-center items-center space-x-2" },
-                React.createElement("div", { className: "animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-400" }),
-                React.createElement("p", { className: "text-gray-300" }, "Waiting for admin approval...")
-              ),
-              React.createElement("button", {
-                className: "mt-8 bg-zinc-600 text-white font-bold py-2 px-6 rounded hover:bg-zinc-700 transition-colors",
-                onClick: () => {
-                  setBookingAwaitingAction(null);
-                  onCancel();
-                }
-              }, "Go Back to Plans")
-            )
-          );
+      // Show "Thank You" and auto-return to home after payment confirmation
+      useEffect(() => {
+        if (bookingAwaitingAction && bookingAwaitingAction.status === 'paid') {
+          setShowThankYou(true);
+          const t = setTimeout(() => {
+            setShowThankYou(false);
+            setBookingAwaitingAction(null);
+            onCancel();
+          }, 2000);
+          return () => clearTimeout(t);
         }
+      }, [bookingAwaitingAction && bookingAwaitingAction.status === 'paid']);
+
+      if (showThankYou && bookingAwaitingAction) {
+        return (
+          React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
+            React.createElement("h2", { className: "text-2xl font-bold mb-4 text-green-400" }, "Your booking is confirmed!"),
+            React.createElement("div", { className: "mb-2" }, React.createElement("b", null, bookingAwaitingAction.plan)),
+            React.createElement("div", null, "Date: ", React.createElement("b", null, bookingAwaitingAction.date)),
+            React.createElement("div", null, "Time: ", React.createElement("b", null, `${bookingAwaitingAction.startTime} - ${bookingAwaitingAction.endTime}`)),
+            React.createElement("div", null, "Booking ID: ", React.createElement("b", null, bookingAwaitingAction.id)),
+            React.createElement("p", { className: "mt-4 text-gray-300" }, "Thank you for your payment. Returning to Home...")
+          )
+        );
+      }
+      if (bookingAwaitingAction && bookingAwaitingAction.status === 'pending') {
+        return (
+          React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
+            React.createElement("h2", { className: "text-2xl font-bold mb-4 text-yellow-400" }, "Booking Submitted!"),
+            React.createElement("p", { className: "text-lg text-gray-300 mb-4" }, "Your booking request (ID: ", React.createElement("b", null, bookingAwaitingAction.id), ") has been submitted and is awaiting admin approval."),
+            React.createElement("p", { className: "text-md text-gray-400 mb-6" }, "You will be automatically redirected to the payment page once your booking is approved, or notified if it's cancelled."),
+            React.createElement("div", { className: "flex justify-center items-center space-x-2" },
+              React.createElement("div", { className: "animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-400" }),
+              React.createElement("p", { className: "text-gray-300" }, "Waiting for admin approval...")
+            ),
+            React.createElement("button", {
+              className: "mt-8 bg-zinc-600 text-white font-bold py-2 px-6 rounded hover:bg-zinc-700 transition-colors",
+              onClick: () => {
+                setBookingAwaitingAction(null);
+                onCancel();
+              }
+            }, "Go Back to Plans")
+          )
+        );
       }
       if (showPaymentModal && bookingAwaitingAction) {
         return React.createElement(UpiPaymentModal, {
