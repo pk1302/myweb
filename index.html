@@ -213,7 +213,6 @@
       const [bookings, setBookings] = useState([]);
       const [bookingAwaitingAction, setBookingAwaitingAction] = useState(null);
       const [showPaymentModal, setShowPaymentModal] = useState(false);
-      const [showThankYou, setShowThankYou] = useState(false);
 
       useEffect(() => {
         return listenBookings(setBookings);
@@ -328,20 +327,7 @@
         });
       };
 
-      // Show "Thank You" and auto-return to home after payment confirmation
-      useEffect(() => {
-        if (bookingAwaitingAction && bookingAwaitingAction.status === 'paid') {
-          setShowThankYou(true);
-          const t = setTimeout(() => {
-            setShowThankYou(false);
-            setBookingAwaitingAction(null);
-            onCancel();
-          }, 2000);
-          return () => clearTimeout(t);
-        }
-      }, [bookingAwaitingAction && bookingAwaitingAction.status === 'paid']);
-
-      if (showThankYou && bookingAwaitingAction) {
+      if (bookingAwaitingAction && bookingAwaitingAction.status === 'paid') {
         return (
           React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
             React.createElement("h2", { className: "text-2xl font-bold mb-4 text-green-400" }, "Your booking is confirmed!"),
@@ -349,10 +335,19 @@
             React.createElement("div", null, "Date: ", React.createElement("b", null, bookingAwaitingAction.date)),
             React.createElement("div", null, "Time: ", React.createElement("b", null, `${bookingAwaitingAction.startTime} - ${bookingAwaitingAction.endTime}`)),
             React.createElement("div", null, "Booking ID: ", React.createElement("b", null, bookingAwaitingAction.id)),
-            React.createElement("p", { className: "mt-4 text-gray-300" }, "Thank you for your payment. Returning to Home...")
+            React.createElement("p", { className: "mt-4 text-gray-300" }, "Thank you for your payment."),
+            React.createElement("div", { className: "mt-4" },
+              React.createElement("button", {
+                className: "bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded hover:bg-yellow-600 transition-colors",
+                onClick: () => { 
+                  onCancel();
+                }
+              }, "OK")
+            )
           )
         );
       }
+
       if (bookingAwaitingAction && bookingAwaitingAction.status === 'pending') {
         return (
           React.createElement("div", { className: "max-w-lg mx-auto bg-zinc-800 rounded-xl shadow-lg p-8 border border-zinc-700 text-center" },
