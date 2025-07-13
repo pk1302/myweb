@@ -32,7 +32,30 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+    // UI Data (repeated from user app for time slot calculations in edit/manual booking modals)
+    const HOURLY_SLOTS = Array.from({ length: 14 }, (_, i) => {
+      const hour = i + 9; // Studio hours 9 AM to 10 PM
+      return `${hour < 10 ? '0' : ''}${hour}:00`;
+    });
+
+    const PRICING_PLANS = [
+      { id: 'basic', name: 'Basic Studio', price: 2000, description: 'Just the space. Bring your own gear and create freely.', features: ['Studio Space Access'] },
+      { id: 'standard', name: 'Standard Package', price: 3500, description: 'A complete setup for most projects, cameraman included.', features: ['Studio Space Access', '2 Professional Cameras', 'Standard Lighting Kit', '2 Shure Microphones', 'Dedicated Cameraman'] },
+      { id: 'premium', name: 'Premium Package', price: 4500, description: 'For complex shoots requiring multiple angles and full support.', features: ['Studio Space Access', '3 Professional Cameras', 'Advanced Lighting Kit', '2 Shure Microphones', 'Dedicated Cameraman'] },
+    ];
+
+
+    /**
+     * Creates a new booking record in Firebase.
+     * This is the same function used in the user app.
+     * @param {object} booking - The booking object to save.
+     * @returns {firebase.database.ThenableReference} A promise-like object for the new booking reference.
+     */
+    function createBooking(booking) {
+      return db.ref('bookings').push(booking);
+    }
 
     /**
      * Updates a booking record in Firebase.
@@ -88,6 +111,392 @@
       );
     }
 
+    /**
+     * EditBookingModal component for editing booking details.
+     * @param {object} props - Component props.
+     * @param {boolean} props.isOpen - Whether the modal is open.
+     * @param {object} props.booking - The booking object to edit.
+     * @param {function} props.onClose - Callback to close the modal.
+     * @param {function} props.onSave - Callback to save the edited booking.
+     * @param {Array<object>} props.allBookings - All bookings for availability check.
+     */
+    function EditBookingModal({ isOpen, booking, onClose, onSave, allBookings }) {
+      const [name, setName] = useState(booking ? booking.name : '');
+      const [phone, setPhone] = useState(booking ? booking.phone : '');
+      const [date, setDate] = useState(booking ? booking.date : new Date().toISOString().split('T')[0]);
+      const [startTime, setStartTime] = useState(booking ? booking.startTime : '');
+      const [endTime, setEndTime] = useState(booking ? booking.endTime : '');
+      const [editError, setEditError] = useState('');
+
+      // Reset states when booking prop changes (e.g., when a new booking is opened for edit)
+      useEffect(() => {
+        if (booking) {
+          setName(booking.name);
+          setPhone(booking.phone);
+          setDate(booking.date);
+          setStartTime(booking.startTime);
+          setEndTime(booking.endTime);
+          setEditError('');
+        }
+      }, [booking]);
+
+      // Recalculate available times based on other confirmed bookings (excluding the current one being edited)
+      const getUnavailableHours = useCallback((currentDate) => {
+        const dayBookings = allBookings.filter(b => 
+          b.date === currentDate && 
+          b.status === 'confirmed' && 
+          b.id !== (booking ? booking.id : null) // Exclude the current booking being edited
+        );
+        let hours = [];
+        dayBookings.forEach(b => {
+          const start = parseInt(b.startTime.split(':')[0], 10);
+          const end = parseInt(b.endTime.split(':')[0], 10);
+          for (let h = start; h < end; h++) hours.push(h);
+        });
+        return hours;
+      }, [allBookings, booking]);
+
+      const unavailableHours = useMemo(() => getUnavailableHours(date), [date, getUnavailableHours]);
+
+      const startTimes = useMemo(() => HOURLY_SLOTS.slice(0, -1).map(time => ({ 
+        value: time, 
+        disabled: unavailableHours.includes(parseInt(time.split(':')[0], 10)) 
+      })), [unavailableHours]);
+
+      const endTimes = useMemo(() => {
+        if (!startTime) return [];
+        const startHour = parseInt(startTime.split(':')[0], 10);
+        let nextUnavailableHour = 23;
+        for (const hour of unavailableHours.sort((a,b) => a - b)) { 
+          if (hour > startHour) { nextUnavailableHour = hour; break; } 
+        }
+        return HOURLY_SLOTS.map(time => parseInt(time.split(':')[0], 10))
+            .filter(hour => hour > startHour && hour <= nextUnavailableHour)
+            .map(hour => ({ value: `${hour < 10 ? '0' : ''}${hour}:00` }));
+      }, [startTime, unavailableHours]);
+
+      const duration = useMemo(() => {
+        if (!startTime || !endTime) return 0;
+        return parseInt(endTime.split(':')[0], 10) - parseInt(startTime.split(':')[0], 10);
+      }, [startTime, endTime]);
+
+      function isValidPhone(num) {
+        return /^[6-9]\d{9}$/.test(num);
+      }
+
+      const handleSave = (e) => {
+        e.preventDefault();
+        setEditError('');
+
+        if (!name || !phone || !date || !startTime || !endTime) {
+          setEditError('Please fill all fields.');
+          return;
+        }
+        if (!isValidPhone(phone)) {
+          setEditError('Please enter a valid 10-digit Indian phone number.');
+          return;
+        }
+        if (duration <= 0) {
+          setEditError('End time must be after start time.');
+          return;
+        }
+
+        // Check for booking conflicts with other bookings
+        const startHour = parseInt(startTime.split(':')[0], 10);
+        const endHour = parseInt(endTime.split(':')[0], 10);
+        for (let hour = startHour; hour < endHour; hour++) {
+          if (unavailableHours.includes(hour)) {
+            setEditError('Selected time slot is not available.');
+            return;
+          }
+        }
+
+        // Prepare updates
+        const updates = {
+          name,
+          phone,
+          date,
+          startTime,
+          endTime,
+          // Note: Plan and amount are not directly editable here as they depend on the plan selected.
+          // If the duration changes, the amount needs to be recalculated.
+          // For simplicity, we're not recalculating amount in this modal.
+          // In a real app, you might want to recalculate amount if time changes.
+        };
+        onSave(booking.id, updates);
+      };
+
+      if (!isOpen || !booking) return null;
+
+      return (
+        React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
+          React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative" },
+            React.createElement("button", { onClick: onClose, className: "absolute top-3 right-4 text-gray-400 hover:text-white transition-colors text-3xl font-light" }, "×"),
+            React.createElement("h2", { className: "text-2xl font-bold mb-6 text-white" }, `Edit Booking: ${booking.id}`),
+            React.createElement("form", { onSubmit: handleSave, autoComplete: "off" },
+              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Name"),
+              React.createElement("input", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: name, onChange: e => setName(e.target.value), autoComplete: "off" }),
+
+              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Phone Number"),
+              React.createElement("input", {
+                className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg",
+                value: phone,
+                onChange: e => setPhone(e.target.value.replace(/\D/g, '').slice(0,10)),
+                maxLength: 10,
+                pattern: "[6-9][0-9]{9}",
+                inputMode: "numeric",
+                placeholder: "10-digit mobile"
+              }),
+
+              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Date"),
+              React.createElement("input", { type: "date", className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: date, onChange: e => setDate(e.target.value), min: new Date().toISOString().split('T')[0] }),
+
+              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Start Time"),
+              React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: startTime, onChange: e => setStartTime(e.target.value) },
+                React.createElement("option", { value: "" }, "Select start time"),
+                startTimes.map(({ value, disabled }) =>
+                  React.createElement("option", { key: value, value, disabled }, value)
+                )
+              ),
+
+              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "End Time"),
+              React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: endTime, onChange: e => setEndTime(e.target.value) },
+                React.createElement("option", { value: "" }, "Select end time"),
+                endTimes.map(({ value }) =>
+                  React.createElement("option", { key: value, value }, value)
+                )
+              ),
+
+              editError && React.createElement("div", { className: "mb-4 text-red-400" }, editError),
+
+              React.createElement("div", { className: "flex space-x-4 mt-6" },
+                React.createElement("button", { type: "submit", className: "bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded-lg hover:bg-yellow-600 transition-colors shadow" }, "Save Changes"),
+                React.createElement("button", { type: "button", className: "bg-zinc-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-zinc-700 transition-colors shadow", onClick: onClose }, "Cancel")
+              )
+            )
+          )
+        )
+      );
+    }
+
+    /**
+     * ManualBookingModal component for creating new bookings manually.
+     * @param {object} props - Component props.
+     * @param {boolean} props.isOpen - Whether the modal is open.
+     * @param {function} props.onClose - Callback to close the modal.
+     * @param {function} props.onCreate - Callback to create the new booking.
+     * @param {Array<object>} props.allBookings - All bookings for availability check.
+     */
+    function ManualBookingModal({ isOpen, onClose, onCreate, allBookings }) {
+      const [name, setName] = useState('');
+      const [phone, setPhone] = useState('');
+      const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+      const [startTime, setStartTime] = useState('');
+      const [endTime, setEndTime] = useState('');
+      const [selectedPlanId, setSelectedPlanId] = useState('');
+      const [paymentOption, setPaymentOption] = useState('full');
+      const [initialStatus, setInitialStatus] = useState('confirmed'); // Default to confirmed for manual bookings
+      const [formError, setFormError] = useState('');
+
+      // Reset form on open
+      useEffect(() => {
+        if (isOpen) {
+          setName('');
+          setPhone('');
+          setDate(new Date().toISOString().split('T')[0]);
+          setStartTime('');
+          setEndTime('');
+          setSelectedPlanId('');
+          setPaymentOption('full');
+          setInitialStatus('confirmed');
+          setFormError('');
+        }
+      }, [isOpen]);
+
+      // Recalculate available times based on other confirmed bookings
+      const getUnavailableHours = useCallback((currentDate) => {
+        const dayBookings = allBookings.filter(b => 
+          b.date === currentDate && 
+          b.status === 'confirmed'
+        );
+        let hours = [];
+        dayBookings.forEach(b => {
+          const start = parseInt(b.startTime.split(':')[0], 10);
+          const end = parseInt(b.endTime.split(':')[0], 10);
+          for (let h = start; h < end; h++) hours.push(h);
+        });
+        return hours;
+      }, [allBookings]);
+
+      const unavailableHours = useMemo(() => getUnavailableHours(date), [date, getUnavailableHours]);
+
+      const startTimes = useMemo(() => HOURLY_SLOTS.slice(0, -1).map(time => ({ 
+        value: time, 
+        disabled: unavailableHours.includes(parseInt(time.split(':')[0], 10)) 
+      })), [unavailableHours]);
+
+      const endTimes = useMemo(() => {
+        if (!startTime) return [];
+        const startHour = parseInt(startTime.split(':')[0], 10);
+        let nextUnavailableHour = 23;
+        for (const hour of unavailableHours.sort((a,b) => a - b)) { 
+          if (hour > startHour) { nextUnavailableHour = hour; break; } 
+        }
+        return HOURLY_SLOTS.map(time => parseInt(time.split(':')[0], 10))
+            .filter(hour => hour > startHour && hour <= nextUnavailableHour)
+            .map(hour => ({ value: `${hour < 10 ? '0' : ''}${hour}:00` }));
+      }, [startTime, unavailableHours]);
+
+      const selectedPlan = PRICING_PLANS.find(p => p.id === selectedPlanId);
+      const duration = useMemo(() => {
+        if (!startTime || !endTime) return 0;
+        return parseInt(endTime.split(':')[0], 10) - parseInt(startTime.split(':')[0], 10);
+      }, [startTime, endTime]);
+      
+      // Calculate total amount based on selected plan and duration
+      const totalAmount = selectedPlan ? selectedPlan.price * duration : 0;
+      const paidAmount = paymentOption === "full" ? totalAmount : Math.ceil(totalAmount / 2);
+
+
+      function isValidPhone(num) {
+        return /^[6-9]\d{9}$/.test(num);
+      }
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        setFormError('');
+
+        if (!name || !phone || !date || !startTime || !endTime || !selectedPlanId) {
+          setFormError('Please fill all required fields.');
+          return;
+        }
+        if (!isValidPhone(phone)) {
+          setFormError('Please enter a valid 10-digit Indian phone number.');
+          return;
+        }
+        if (duration <= 0) {
+          setFormError('End time must be after start time.');
+          return;
+        }
+
+        // Check for booking conflicts with existing confirmed bookings
+        const startHour = parseInt(startTime.split(':')[0], 10);
+        const endHour = parseInt(endTime.split(':')[0], 10);
+        for (let hour = startHour; hour < endHour; hour++) {
+          if (unavailableHours.includes(hour)) {
+            setFormError('Selected time slot is not available.');
+            return;
+          }
+        }
+
+        const newBooking = {
+          name,
+          phone,
+          plan: selectedPlan.name, // Save plan name
+          date,
+          startTime,
+          endTime,
+          status: initialStatus,
+          amount: totalAmount,
+          paid: initialStatus === 'paid' ? totalAmount : 0, // Mark as paid if initial status is 'paid'
+          paymentOption: initialStatus === 'paid' ? 'full' : paymentOption, // Assume full payment if initially paid
+          createdAt: new Date().toISOString(),
+          // You might add an 'adminCreated: true' flag here if needed
+        };
+        onCreate(newBooking); // Call the onCreate callback from AdminPanel
+      };
+
+      if (!isOpen) return null;
+
+      return (
+        React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
+          React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative" },
+            React.createElement("button", { onClick: onClose, className: "absolute top-3 right-4 text-gray-400 hover:text-white transition-colors text-3xl font-light" }, "×"),
+            React.createElement("h2", { className: "text-2xl font-bold mb-6 text-white" }, "Add New Manual Booking"),
+            React.createElement("form", { onSubmit: handleSubmit, autoComplete: "off" },
+              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Customer Name"),
+              React.createElement("input", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: name, onChange: e => setName(e.target.value), autoComplete: "off" }),
+
+              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Phone Number"),
+              React.createElement("input", {
+                className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg",
+                value: phone,
+                onChange: e => setPhone(e.target.value.replace(/\D/g, '').slice(0,10)),
+                maxLength: 10,
+                pattern: "[6-9][0-9]{9}",
+                inputMode: "numeric",
+                placeholder: "10-digit mobile"
+              }),
+
+              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Date"),
+              React.createElement("input", { type: "date", className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: date, onChange: e => setDate(e.target.value), min: new Date().toISOString().split('T')[0] }),
+
+              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Start Time"),
+              React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: startTime, onChange: e => setStartTime(e.target.value) },
+                React.createElement("option", { value: "" }, "Select start time"),
+                startTimes.map(({ value, disabled }) =>
+                  React.createElement("option", { key: value, value, disabled }, value)
+                )
+              ),
+
+              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "End Time"),
+              React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: endTime, onChange: e => setEndTime(e.target.value) },
+                React.createElement("option", { value: "" }, "Select end time"),
+                endTimes.map(({ value }) =>
+                  React.createElement("option", { key: value, value }, value)
+                )
+              ),
+
+              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Select Plan"),
+              React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: selectedPlanId, onChange: e => setSelectedPlanId(e.target.value) },
+                React.createElement("option", { value: "" }, "Select a plan"),
+                PRICING_PLANS.map(plan =>
+                  React.createElement("option", { key: plan.id, value: plan.id }, plan.name)
+                )
+              ),
+
+              React.createElement("div", { className: "mb-4" },
+                React.createElement("span", { className: "text-gray-300" }, "Payment Option: "),
+                React.createElement("label", { className: "ml-2" },
+                  React.createElement("input", { type: "radio", value: "full", checked: paymentOption === "full", onChange: () => setPaymentOption('full'), className: "form-radio text-yellow-500" }),
+                  React.createElement("span", { className: "ml-1" }, "Full")
+                ),
+                React.createElement("label", { className: "ml-4" },
+                  React.createElement("input", { type: "radio", value: "half", checked: paymentOption === "half", onChange: () => setPaymentOption('half'), className: "form-radio text-yellow-500" }),
+                  React.createElement("span", { className: "ml-1" }, "50% Advance")
+                )
+              ),
+
+              React.createElement("label", { className: "block mb-2 text-sm font-medium text-gray-300" }, "Initial Status"),
+              React.createElement("select", { className: "w-full mb-4 p-2 rounded bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded-lg", value: initialStatus, onChange: e => setInitialStatus(e.target.value) },
+                React.createElement("option", { value: "pending" }, "Pending Approval"),
+                React.createElement("option", { value: "confirmed" }, "Confirmed (Awaiting Payment)"),
+                React.createElement("option", { value: "paid" }, "Paid"),
+                React.createElement("option", { value: "cancelled" }, "Cancelled")
+              ),
+
+              React.createElement("div", { className: "mb-4" },
+                React.createElement("span", { className: "text-gray-300" }, "Calculated Amount: "),
+                React.createElement("span", { className: "text-yellow-400 font-bold text-lg" }, `₹${totalAmount.toLocaleString('en-IN')}`)
+              ),
+              initialStatus !== 'paid' && React.createElement("div", { className: "mb-4" },
+                React.createElement("span", { className: "text-gray-300" }, "Amount Due Now: "),
+                React.createElement("span", { className: "text-green-400 font-bold text-lg" }, `₹${paidAmount.toLocaleString('en-IN')}`)
+              ),
+
+              formError && React.createElement("div", { className: "mb-4 text-red-400" }, formError),
+
+              React.createElement("div", { className: "flex space-x-4 mt-6" },
+                React.createElement("button", { type: "submit", className: "bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded-lg hover:bg-yellow-600 transition-colors shadow" }, "Create Booking"),
+                React.createElement("button", { type: "button", className: "bg-zinc-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-zinc-700 transition-colors shadow", onClick: onClose }, "Cancel")
+              )
+            )
+          )
+        )
+      );
+    }
+
+
     function AdminPanel() {
       const [password, setPassword] = useState('');
       const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -101,6 +510,12 @@
       // State for the custom cancellation confirmation modal
       const [showCancelConfirm, setShowCancelConfirm] = useState(false);
       const [bookingToCancelId, setBookingToCancelId] = useState(null);
+
+      // States for editing and manual booking
+      const [showEditModal, setShowEditModal] = useState(false);
+      const [bookingToEdit, setBookingToEdit] = useState(null);
+      const [showManualBookingModal, setShowManualBookingModal] = useState(false);
+
 
       // Effect to handle bookings and trigger notification sound
       useEffect(() => {
@@ -158,17 +573,87 @@
       /**
        * Updates the status of a booking.
        * @param {string} id - The ID of the booking.
-       * @param {string} status - The new status ('confirmed' or 'cancelled').
+       * @param {string} status - The new status ('confirmed', 'paid', or 'cancelled').
+       * @param {number} [paidAmount] - Optional: The amount paid, used when marking as 'paid'.
        */
-      function handleStatus(id, status) {
-        updateBooking(id, { status }).then(() => {
-          setAdminMsg(`Booking ${status === "confirmed" ? "confirmed" : "cancelled"} successfully.`);
+      function handleStatus(id, status, paidAmount = null) {
+        const updates = { status };
+        if (status === 'paid' && typeof paidAmount === 'number') {
+            updates.paid = paidAmount; // Update the paid amount when marking as paid
+        }
+        updateBooking(id, updates).then(() => {
+          setAdminMsg(`Booking ${status === "confirmed" ? "approved" : status === "paid" ? "marked as paid" : "cancelled"} successfully.`);
           setTimeout(() => setAdminMsg(null), 3000); // Clear message after 3 seconds
         }).catch(error => {
           console.error("Error updating booking status:", error);
           setAdminMsg(`Failed to update booking status: ${error.message}`);
           setTimeout(() => setAdminMsg(null), 3000);
         });
+      }
+
+      /**
+       * Handles saving edited booking details.
+       * @param {string} id - The ID of the booking to save.
+       * @param {object} updates - The updated fields for the booking.
+       */
+      function handleSaveEdit(id, updates) {
+        updateBooking(id, updates).then(() => {
+          setAdminMsg("Booking updated successfully.");
+          setTimeout(() => setAdminMsg(null), 3000);
+          setShowEditModal(false); // Close the modal
+          setBookingToEdit(null); // Clear the editing state
+        }).catch(error => {
+          console.error("Error saving booking:", error);
+          setAdminMsg(`Failed to save booking: ${error.message}`);
+          setTimeout(() => setAdminMsg(null), 3000);
+        });
+      }
+
+      /**
+       * Handles opening the edit modal.
+       * @param {object} booking - The booking object to edit.
+       */
+      function handleOpenEditModal(booking) {
+        setBookingToEdit(booking);
+        setShowEditModal(true);
+      }
+
+      /**
+       * Handles closing the edit modal.
+       */
+      function handleCloseEditModal() {
+        setShowEditModal(false);
+        setBookingToEdit(null);
+      }
+
+      /**
+       * Handles creating a new manual booking.
+       * @param {object} newBookingData - The data for the new booking.
+       */
+      function handleCreateManualBooking(newBookingData) {
+        createBooking(newBookingData).then(() => {
+          setAdminMsg("Manual booking created successfully.");
+          setTimeout(() => setAdminMsg(null), 3000);
+          setShowManualBookingModal(false); // Close the modal
+        }).catch(error => {
+          console.error("Error creating manual booking:", error);
+          setAdminMsg(`Failed to create manual booking: ${error.message}`);
+          setTimeout(() => setAdminMsg(null), 3000);
+        });
+      }
+
+      /**
+       * Handles opening the manual booking modal.
+       */
+      function handleOpenManualBookingModal() {
+        setShowManualBookingModal(true);
+      }
+
+      /**
+       * Handles closing the manual booking modal.
+       */
+      function handleCloseManualBookingModal() {
+        setShowManualBookingModal(false);
       }
 
       /**
@@ -248,6 +733,13 @@
           React.createElement("h2", { className: "text-3xl font-bold mb-6 text-white text-center" }, "Admin Panel: Studio Bookings"),
           adminMsg && React.createElement("div", { className: "mb-4 p-4 bg-green-800 text-green-200 rounded-lg text-center" }, adminMsg),
 
+          React.createElement("div", { className: "flex justify-end mb-4" },
+            React.createElement("button", {
+              className: "bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow",
+              onClick: handleOpenManualBookingModal
+            }, "Add New Manual Booking")
+          ),
+
           bookings.length === 0
             ? React.createElement("div", { className: "text-gray-400 text-center py-10 text-lg" }, "No bookings yet.")
             : React.createElement("div", { className: "overflow-x-auto rounded-lg shadow-xl border border-zinc-700" },
@@ -268,27 +760,32 @@
                             ? "bg-red-900 text-red-200"
                             : b.status === "pending"
                               ? "bg-zinc-700 text-yellow-100" // Highlight pending bookings
-                              : "bg-zinc-800 text-gray-300"
+                              : b.status === "confirmed" // Highlight approved but not paid
+                                ? "bg-blue-900 text-blue-200"
+                                : "bg-zinc-800 text-gray-300" // Paid or other statuses
                       },
                         React.createElement("td", { className: "p-4" }, b.name),
                         React.createElement("td", { className: "p-4" }, b.phone),
                         React.createElement("td", { className: "p-4" }, b.plan),
                         React.createElement("td", { className: "p-4" }, b.date),
                         React.createElement("td", { className: "p-4" }, `${b.startTime} - ${b.endTime}`),
-                        React.createElement("td", { className: "p-4" }, `₹${b.amount.toLocaleString('en-IN')}`),
-                        React.createElement("td", { className: "p-4" }, `₹${b.paid.toLocaleString('en-IN')}`),
+                        // Defensive checks for amount and paid
+                        React.createElement("td", { className: "p-4" }, `₹${typeof b.amount === 'number' && !isNaN(b.amount) ? b.amount.toLocaleString('en-IN') : 'N/A'}`),
+                        React.createElement("td", { className: "p-4" }, `₹${typeof b.paid === 'number' && !isNaN(b.paid) ? b.paid.toLocaleString('en-IN') : 'N/A'}`),
                         React.createElement("td", { className: "p-4 font-medium" },
                           b.status === "confirmed"
-                            ? React.createElement("span", { className: "text-green-400" }, "Confirmed")
+                            ? React.createElement("span", { className: "text-blue-400" }, "Approved (Awaiting Payment)")
                             : b.status === "pending"
-                              ? React.createElement("span", { className: "text-yellow-400" }, "Pending")
-                              : React.createElement("span", { className: "text-red-400" }, "Cancelled")
+                              ? React.createElement("span", { className: "text-yellow-400" }, "Pending Approval")
+                              : b.status === "paid"
+                                ? React.createElement("span", { className: "text-green-400" }, "Paid")
+                                : React.createElement("span", { className: "text-red-400" }, "Cancelled")
                         ),
                         React.createElement("td", { className: "p-4" },
-                          b.status === "pending" && React.createElement("div", { className: "flex space-x-2" },
+                          b.status === "pending" && React.createElement("div", { className: "flex flex-wrap gap-2" },
                             React.createElement("button", {
                               className: "bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition-colors shadow",
-                              onClick: () => handleStatus(b.id, "confirmed")
+                              onClick: () => handleStatus(b.id, "confirmed") // Admin approves, user gets payment option
                             }, "Approve"),
                             React.createElement("button", {
                               className: "bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition-colors shadow",
@@ -296,16 +793,49 @@
                                 setBookingToCancelId(b.id);
                                 setShowCancelConfirm(true);
                               }
-                            }, "Cancel")
+                            }, "Cancel"),
+                            React.createElement("button", {
+                              className: "bg-zinc-600 text-white px-3 py-1 rounded-lg hover:bg-zinc-700 transition-colors shadow",
+                              onClick: () => handleOpenEditModal(b)
+                            }, "Edit")
                           ),
-                          b.status === "confirmed" && React.createElement("div", null,
+                          b.status === "confirmed" && React.createElement("div", { className: "flex flex-wrap gap-2" }, // If approved, show option to mark as paid or cancel
+                            React.createElement("button", {
+                              className: "bg-purple-600 text-white px-3 py-1 rounded-lg hover:bg-purple-700 transition-colors shadow",
+                              onClick: () => {
+                                // For simplicity, we'll mark the full amount as paid.
+                                // In a real app, you might have an input for actual paid amount.
+                                handleStatus(b.id, "paid", b.amount);
+                              }
+                            }, "Mark as Paid"),
                             React.createElement("button", {
                               className: "bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition-colors shadow",
                               onClick: () => {
                                 setBookingToCancelId(b.id);
                                 setShowCancelConfirm(true);
                               }
-                            }, "Cancel")
+                            }, "Cancel"),
+                            React.createElement("button", {
+                              className: "bg-zinc-600 text-white px-3 py-1 rounded-lg hover:bg-zinc-700 transition-colors shadow",
+                              onClick: () => handleOpenEditModal(b)
+                            }, "Edit")
+                          ),
+                          b.status === "paid" && React.createElement("div", { className: "flex flex-wrap gap-2" },
+                            React.createElement("span", { className: "text-green-400 font-semibold" }, "Completed"),
+                            React.createElement("button", {
+                              className: "ml-2 bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 transition-colors shadow",
+                              onClick: () => {
+                                setBookingToCancelId(b.id);
+                                setShowCancelConfirm(true);
+                              }
+                            }, "Cancel"),
+                            React.createElement("button", {
+                              className: "bg-zinc-600 text-white px-3 py-1 rounded-lg hover:bg-zinc-700 transition-colors shadow",
+                              onClick: () => handleOpenEditModal(b)
+                            }, "Edit")
+                          ),
+                          b.status === "cancelled" && React.createElement("div", null,
+                            React.createElement("span", { className: "text-gray-400" }, "Action Not Available")
                           )
                         )
                       )
@@ -332,6 +862,23 @@
             message: "Are you sure you want to cancel this booking?",
             onConfirm: handleConfirmCancel,
             onCancel: handleCancelCancel
+          }),
+
+          // Edit Booking Modal
+          bookingToEdit && React.createElement(EditBookingModal, {
+            isOpen: showEditModal,
+            booking: bookingToEdit,
+            onClose: handleCloseEditModal,
+            onSave: handleSaveEdit,
+            allBookings: bookings // Pass all bookings for availability checks
+          }),
+
+          // Manual Booking Modal
+          React.createElement(ManualBookingModal, {
+            isOpen: showManualBookingModal,
+            onClose: handleCloseManualBookingModal,
+            onCreate: handleCreateManualBooking,
+            allBookings: bookings // Pass all bookings for availability checks
           })
         )
       );
