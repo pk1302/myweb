@@ -535,144 +535,146 @@ useEffect(() => {
      * @param {number} props.amount - The amount to be paid.
      * @param {object} props.booking - The booking object (includes ID and current status).
      */
-    function UpiPaymentModal({ isOpen, onClose, amount, booking }) {
-      const UPI_ID = 'qr.possible@sib';
-      const STUDIO_NAME = 'Possible Studio';
-      const CONTACT_NUMBER = '9994858927';
-      // Defensive check: Ensure amount is a number before using it in QR code data
-      const safeAmountForQR = typeof amount === 'number' ? amount.toFixed(2) : '0.00';
-      const QR_CODE_URL = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' +
-        encodeURIComponent(
-          `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${safeAmountForQR}&cu=INR&tn=Booking%20ID%20${booking.id || ''}`
-        );
-      const [isMobile, setIsMobile] = React.useState(false);
-      const [isIOS, setIsIOS] = React.useState(false);
-      const [currentBookingStatus, setCurrentBookingStatus] = useState(booking.status);
-
-      useEffect(() => {
-        setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-        setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent));
-      }, []);
-
-      // Listen to the specific booking's status to update the modal content
-      useEffect(() => {
-      if (isOpen && booking && booking.id) {
-        const unsubscribe = listenToBooking(booking.id, (updatedBooking) => {
-          if (updatedBooking) {
-            setCurrentBookingStatus(updatedBooking.status);
-            if (updatedBooking.status === 'paid') {
-              onClose(); // Close modal
-            }
-          } else {
-            setCurrentBookingStatus('cancelled');
-            onClose(); // Handle deletion
-          }
-        });
-        return () => unsubscribe();
-      }
-    }, [isOpen, booking, onClose]);
- // Re-run if modal opens, booking changes, or onClose changes
-
-      if (!isOpen || !booking) return null;
-
-      const handleMobilePay = () => {
-        // Defensive check: Ensure amount is a number before using it in UPI deep link
-        const safeAmountForLink = typeof amount === 'number' ? amount.toFixed(2) : '0.00';
-        const upiUrl = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${safeAmountForLink}&cu=INR&tn=Booking%20ID%20${booking.id}`;
-        window.location.href = upiUrl;
-      };
-
-      // Render cancellation message if booking status is cancelled
-      if (currentBookingStatus === 'cancelled') {
-        return (
-          React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
-            React.createElement("div", { className: "bg-red-900 p-6 rounded-2xl shadow-2xl border border-red-700 w-full max-w-md relative text-center" },
-              React.createElement("h2", { className: "text-2xl font-bold mb-4 text-white" }, "Booking Cancellation Notification"),
-              React.createElement("p", { className: "text-lg text-red-100 mb-4" }, "Your booking has been cancelled."),
-              React.createElement("p", { className: "text-md text-red-200 mb-4" }, "For more details, please call: ", React.createElement("a", { href: `tel:${CONTACT_NUMBER}`, className: "text-yellow-400 hover:underline" }, CONTACT_NUMBER)),
-              React.createElement("p", { className: "text-sm text-red-300 mb-6" }, "If you have already made a payment, your refund will be processed within 24 hours."),
-              React.createElement("button", {
-                onClick: onClose, // Close modal and reset BookingForm state
-                className: "bg-red-700 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-800 transition-colors"
-              }, "Close")
-            )
-          )
-        );
-      }
-
-      // Defensive check: Ensure amount is a number for display
-      const displayAmount = typeof amount === 'number' ? amount.toLocaleString('en-IN') : 'N/A';
-
-      // Render payment details if booking status is confirmed (or initially pending before this change)
-      return (
-        React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
-          React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative" },
-            React.createElement("button", { onClick: onClose, className: "absolute top-3 right-4 text-gray-400 hover:text-white transition-colors text-3xl font-light" }, "×"),
-            React.createElement("div", { className: "text-center mb-4" },
-              React.createElement("h2", { className: "text-2xl font-bold text-white" }, "Complete Your Payment")
-            ),
-            React.createElement("div", { className: "text-center mb-6" },
-              React.createElement("p", { className: "text-sm text-gray-400" }, "Your Booking ID"),
-              React.createElement("p", { className: "text-2xl font-bold text-yellow-400 tracking-widest bg-zinc-900 py-2 rounded-md font-mono" }, booking.id || ""),
-              React.createElement("p", { className: "text-xs text-yellow-500 mt-2" }, "Please add this ID to your UPI payment notes/remarks.")
-            ),
-            isIOS && (
-              React.createElement("div", { className: "mb-4 text-yellow-400 font-semibold" },
-                "On iPhone, please scan this QR with your UPI app to pay.",
-                React.createElement("br", null),
-                "Or use the UPI ID below in your app's 'Pay by UPI ID' option."
-              )
-            ),
-            isMobile && !isIOS && (
-              React.createElement("button", { onClick: handleMobilePay, className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center space-x-3 mb-4" },
-                React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-8 w-8", viewBox: "0 0 24 24", fill: "currentColor" },
-                  React.createElement("path", { d: "M16.5 13.5h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zm-9-4h9c.83 0 1.5-.67 1.5-1.5S17.33 6.5 16.5 6.5h-9C6.67 6.5 6 7.17 6 8s.67 1.5 1.5 1.5zm9 8h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zM22 2H2v20h20V2zm-2 18H4V4h16v16z" })
-                ),
-                React.createElement("span", null, `Pay ₹${displayAmount} with UPI`)
-              )
-            ),
-            React.createElement("div", { className: "bg-white p-4 rounded-lg flex justify-center mb-2" },
-              React.createElement("img", { src: QR_CODE_URL, alt: "UPI QR Code", className: "w-48 h-48 object-contain" })
-            ),
-            React.createElement("div", { className: "text-center text-yellow-400 font-extrabold text-lg mb-2 tracking-wide" },
-              "UPI ID: ",
-              React.createElement("span", null, UPI_ID)
-            ),
-            React.createElement("div", { className: "mt-6 text-center bg-zinc-900/50 p-4 rounded-lg" },
-              React.createElement("div", { className: "flex justify-center items-center space-x-2" },
-                React.createElement("div", { className: "animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-400" }),
-                React.createElement("p", { className: "text-gray-300" }, "Waiting for payment confirmation...")
-              ),
-              React.createElement("p", { className: "text-xs text-gray-500 mt-2" }, "This window will close automatically once payment is verified.")
-            )
-          )
-        )
-      );
-    }
-
-    /**
-     * Main App component.
-     */
-    function App() {
-      const [selectedPlan, setSelectedPlan] = useState(null);
-
-      return (
-        React.createElement(HashRouter, null,
-          React.createElement(Header, null),
-          React.createElement("main", null,
-            React.createElement(Switch, null,
-              React.createElement(Route, { exact: true, path: "/" },
-                !selectedPlan ? (
-                  React.createElement(Pricing, { onSelectPlan: setSelectedPlan })
-                ) : (
-                  React.createElement(BookingForm, {
-                    plan: selectedPlan,
-                    onCancel: () => setSelectedPlan(null)
-                  })
-                )
-              ),
-              React.createElement(Route, { render: () => React.createElement(Redirect, { to: "/" }) })
-            )
+    [...]
+538|     function UpiPaymentModal({ isOpen, onClose, amount, booking }) {
+539|       const UPI_ID = 'qr.possible@sib';
+540|       const STUDIO_NAME = 'Possible Studio';
+541|       const CONTACT_NUMBER = '9994858927';
+542|       // Defensive check: Ensure amount is a number before using it in QR code data
+543|       const safeAmountForQR = typeof amount === 'number' ? amount.toFixed(2) : '0.00';
+544|       const QR_CODE_URL = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' +
+545|         encodeURIComponent(
+546|           `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${safeAmountForQR}&cu=INR&tn=Booking%20ID%20${booking.id || ''}`
+547|         );
+548|       const [isMobile, setIsMobile] = React.useState(false);
+549|       const [isIOS, setIsIOS] = React.useState(false);
+550|       const [currentBookingStatus, setCurrentBookingStatus] = useState(booking.status);
+551|       const [showConfirmation, setShowConfirmation] = useState(booking.status === "paid");
+552| 
+553|       useEffect(() => {
+554|         setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+555|         setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent));
+556|       }, []);
+557| 
+558|       // Listen to the specific booking's status to update the modal content
+559|       useEffect(() => {
+560|       if (isOpen && booking && booking.id) {
+561|         const unsubscribe = listenToBooking(booking.id, (updatedBooking) => {
+562|           if (updatedBooking) {
+563|             setCurrentBookingStatus(updatedBooking.status);
+564|             if (updatedBooking.status === 'paid') {
+565|               setShowConfirmation(true); // Show confirmation instead of closing
+566|             }
+567|           } else {
+568|             setCurrentBookingStatus('cancelled');
+569|             onClose(); // Handle deletion
+570|           }
+571|         });
+572|         return () => unsubscribe();
+573|       }
+574|     }, [isOpen, booking, onClose]);
+575|  // Re-run if modal opens, booking changes, or onClose changes
+576| 
+577|       if (!isOpen || !booking) return null;
+578| 
+579|       const handleMobilePay = () => {
+580|         // Defensive check: Ensure amount is a number before using it in UPI deep link
+581|         const safeAmountForLink = typeof amount === 'number' ? amount.toFixed(2) : '0.00';
+582|         const upiUrl = `upi://pay?pa=${UPI_ID}&pn=${encodeURIComponent(STUDIO_NAME)}&am=${safeAmountForLink}&cu=INR&tn=Booking%20ID%20${booking.id}`;
+583|         window.location.href = upiUrl;
+584|       };
+585| 
+586|       // Render cancellation message if booking status is cancelled
+587|       if (currentBookingStatus === 'cancelled') {
+588|         return (
+589|           React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
+590|             React.createElement("div", { className: "bg-red-900 p-6 rounded-2xl shadow-2xl border border-red-700 w-full max-w-md relative text-center" },
+591|               React.createElement("h2", { className: "text-2xl font-bold mb-4 text-white" }, "Booking Cancellation Notification"),
+592|               React.createElement("p", { className: "text-lg text-red-100 mb-4" }, "Your booking has been cancelled."),
+593|               React.createElement("p", { className: "text-md text-red-200 mb-4" }, "For more details, please call: ", React.createElement("a", { href: `tel:${CONTACT_NUMBER}`, className: "text-ye[...]
+594|               React.createElement("p", { className: "text-sm text-red-300 mb-6" }, "If you have already made a payment, your refund will be processed within 24 hours."),
+595|               React.createElement("button", {
+596|                 onClick: onClose, // Close modal and reset BookingForm state
+597|                 className: "bg-red-700 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-800 transition-colors"
+598|               }, "Close")
+599|             )
+600|           )
+601|         );
+602|       }
+603| 
+604|       // If status is 'paid', show booking confirmation in modal
+605|       if (showConfirmation && currentBookingStatus === 'paid') {
+606|         return (
+607|           React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
+608|             React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative text-center" },
+609|               React.createElement("h2", { className: "text-2xl font-bold mb-4 text-green-400" }, "Booking Confirmed!"),
+610|               React.createElement("div", { className: "mb-2" }, React.createElement("b", null, booking.plan)),
+611|               React.createElement("div", null, "Date: ", React.createElement("b", null, booking.date)),
+612|               React.createElement("div", null, "Time: ", React.createElement("b", null, `${booking.startTime} - ${booking.endTime}`)),
+613|               React.createElement("div", null, "Booking ID: ", React.createElement("b", null, booking.id)),
+614|               React.createElement("p", { className: "mt-4 text-gray-300" }, "Thank you for your payment! Your booking is now fully confirmed."),
+615|               React.createElement("button", {
+616|                 className: "mt-6 bg-yellow-500 text-zinc-900 font-bold py-2 px-6 rounded-lg hover:bg-yellow-600 transition-colors",
+617|                 onClick: () => {
+618|                   setShowConfirmation(false);
+619|                   onClose();
+620|                 }
+621|               }, "OK")
+622|             )
+623|           )
+624|         );
+625|       }
+626| 
+627|       // Defensive check: Ensure amount is a number for display
+628|       const displayAmount = typeof amount === 'number' ? amount.toLocaleString('en-IN') : 'N/A';
+629| 
+630|       // Render payment details if booking status is confirmed (or initially pending before this change)
+631|       return (
+632|         React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" },
+633|           React.createElement("div", { className: "bg-zinc-800 p-6 rounded-2xl shadow-2xl border border-zinc-700 w-full max-w-md relative" },
+634|             React.createElement("button", { onClick: onClose, className: "absolute top-3 right-4 text-gray-400 hover:text-white transition-colors text-3xl font-light" }, "×"),
+635|             React.createElement("div", { className: "text-center mb-4" },
+636|               React.createElement("h2", { className: "text-2xl font-bold text-white" }, "Complete Your Payment")
+637|             ),
+638|             React.createElement("div", { className: "text-center mb-6" },
+639|               React.createElement("p", { className: "text-sm text-gray-400" }, "Your Booking ID"),
+640|               React.createElement("p", { className: "text-2xl font-bold text-yellow-400 tracking-widest bg-zinc-900 py-2 rounded-md font-mono" }, booking.id || ""),
+641|               React.createElement("p", { className: "text-xs text-yellow-500 mt-2" }, "Please add this ID to your UPI payment notes/remarks.")
+642|             ),
+643|             isIOS && (
+644|               React.createElement("div", { className: "mb-4 text-yellow-400 font-semibold" },
+645|                 "On iPhone, please scan this QR with your UPI app to pay.",
+646|                 React.createElement("br", null),
+647|                 "Or use the UPI ID below in your app's 'Pay by UPI ID' option."
+648|               )
+649|             ),
+650|             isMobile && !isIOS && (
+651|               React.createElement("button", { onClick: handleMobilePay, className: "w-full p-4 text-lg font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors flex items[...]
+652|                 React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", className: "h-8 w-8", viewBox: "0 0 24 24", fill: "currentColor" },
+653|                   React.createElement("path", { d: "M16.5 13.5h-9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5h9c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5zm-9-4h9c.83 0 1.5-.67 1.5-1.5S17.33 6.5 16.5 6.5h-[...]
+654|                 ),
+655|                 React.createElement("span", null, `Pay ₹${displayAmount} with UPI`)
+656|               )
+657|             ),
+658|             React.createElement("div", { className: "bg-white p-4 rounded-lg flex justify-center mb-2" },
+659|               React.createElement("img", { src: QR_CODE_URL, alt: "UPI QR Code", className: "w-48 h-48 object-contain" })
+660|             ),
+661|             React.createElement("div", { className: "text-center text-yellow-400 font-extrabold text-lg mb-2 tracking-wide" },
+662|               "UPI ID: ",
+663|               React.createElement("span", null, UPI_ID)
+664|             ),
+665|             React.createElement("div", { className: "mt-6 text-center bg-zinc-900/50 p-4 rounded-lg" },
+666|               React.createElement("div", { className: "flex justify-center items-center space-x-2" },
+667|                 React.createElement("div", { className: "animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-400" }),
+668|                 React.createElement("p", { className: "text-gray-300" }, "Waiting for payment confirmation...")
+669|               ),
+670|               React.createElement("p", { className: "text-xs text-gray-500 mt-2" }, "This window will close automatically once payment is verified.")
+671|             )
+672|           )
+673|         )
+674|       );
+675|     }
+[...]
           ),
           React.createElement(Footer)
         )
